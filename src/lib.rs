@@ -17,7 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use threadpool::ThreadPool;
 
 const EPSILON: f64 = 1e-6;
@@ -38,6 +38,10 @@ pub fn render(
     // Progress bar
     let pb = ProgressBar::new(u64::from(width * height));
 
+    pb.set_style(ProgressStyle::default_bar().template(
+        "{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {percent}/100% ({eta})",
+    ));
+
     let gamma_correction = gamma.recip();
 
     let w = f64::from(width);
@@ -54,7 +58,6 @@ pub fn render(
         width, height, samples, workers
     );
     println!();
-    println!("Processing {} pixels...", width * height);
 
     let start = Instant::now();
 
