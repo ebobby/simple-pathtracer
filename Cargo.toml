@@ -1,7 +1,10 @@
 [package]
-name = "simple-pathtracer"
+name = "pathtracer"
 version = "0.1.0"
 authors = ["Francisco Soto <ebobby@ebobby.org>"]
 edition = "2018"
 
 [dependencies]
+image = "0.21.0"
+rand = "0.6.5"
+threadpool = "1.0"
