@@ -5,15 +5,15 @@ use crate::ray::Ray;
 use crate::vector::Vec3;
 
 use std::fmt::Debug;
-use std::marker::Sync;
+use std::marker::{Send, Sync};
 
-pub trait Intersectable: Debug + Sync {
+pub trait Intersectable: Debug + Send + Sync {
     fn intersect(&self, ray: Ray) -> Option<f64>;
     fn normal(&self, point: Vec3) -> Vec3;
     fn material(&self) -> Material;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct Intersection {
     pub normal: Vec3,
     pub p: Vec3,
@@ -23,7 +23,7 @@ pub struct Intersection {
 
 #[derive(Debug)]
 pub struct IntersectableList {
-    intersectables: Vec<Box<dyn Intersectable>>,
+    intersectables: Vec<Box<dyn Intersectable + Send>>,
 }
 
 impl IntersectableList {
@@ -33,7 +33,7 @@ impl IntersectableList {
         }
     }
 
-    pub fn push(&mut self, object: Box<dyn Intersectable>) {
+    pub fn push(&mut self, object: Box<dyn Intersectable + Send>) {
         self.intersectables.push(object);
     }
 

@@ -6,13 +6,11 @@ use pathtracer::material::Material;
 use pathtracer::scene::Scene;
 use pathtracer::vector::Vec3;
 
-use std::time::Instant;
-
 fn main() {
-    let width = 1920;
-    let height = 1080;
-    let samples = 1000;
-    let aspect_ratio = width as f64 / height as f64;
+    let width = 1440;
+    let height = 900;
+    let samples = 500;
+    let aspect_ratio = f64::from(width) / f64::from(height);
 
     let mut world = IntersectableList::new();
 
@@ -26,11 +24,18 @@ fn main() {
         radius: 3.0,
         material: Material::Lambertian(Color::new(0.2, 0.2, 0.2)),
     }));
+    world.push(Box::new(Sphere {
+        position: Vec3::new(-6., 3., 0.5),
+        radius: 3.0,
+        material: Material::Lambertian(Color::new(0.5, 0.2, 0.5)),
+    }));
+    world.push(Box::new(Sphere {
+        position: Vec3::new(6., 3., 0.5),
+        radius: 3.0,
+        material: Material::Lambertian(Color::new(0.5, 0.5, 0.2)),
+    }));
 
     let scene = Scene {
-        width,
-        height,
-        samples,
         camera: Camera::new(
             Vec3::new(0., 5., 15.),
             Vec3::new(0., 0., 0.),
@@ -41,14 +46,5 @@ fn main() {
         objects: world,
     };
 
-    let now = Instant::now();
-
-    scene.render("result.png".to_string());
-
-    let duration = now.elapsed();
-
-    println!(
-        "{} milliseconds elapsed.",
-        duration.as_secs() * 1000 + u64::from(duration.subsec_millis())
-    );
+    pathtracer::render(scene, width, height, samples, 2.2, 12, "result.png");
 }
