@@ -44,9 +44,9 @@ pub fn render(
 
     let gamma_correction = gamma.recip();
 
-    let w = f64::from(width);
-    let h = f64::from(height);
-    let s = f64::from(samples);
+    let w = f64::from(width).recip();
+    let h = f64::from(height).recip();
+    let s = f64::from(samples).recip();
 
     let pool = ThreadPool::new(workers);
 
@@ -72,15 +72,15 @@ pub fn render(
                 let mut pixel_color = Color::black();
 
                 for _i in 0..samples {
-                    let u = (f64::from(x) + rand::random::<f64>()) / w;
-                    let v = (f64::from(y) + rand::random::<f64>()) / h;
+                    let u = (f64::from(x) + rand::random::<f64>()) * w;
+                    let v = (f64::from(y) + rand::random::<f64>()) * h;
 
                     let ray = scene.camera.get_ray(u, v);
 
                     pixel_color += color(scene.as_ref(), ray, 1);
                 }
 
-                pixel_color = pixel_color / s;
+                pixel_color = pixel_color * s;
 
                 let mut img = img.lock().unwrap();
 
