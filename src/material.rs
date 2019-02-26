@@ -7,6 +7,7 @@ use crate::vector::Vec3;
 pub enum Material {
     None,
     Lambertian(Color),
+    Metal(Color, f64),
 }
 
 #[derive(Debug)]
@@ -46,6 +47,23 @@ impl Material {
                     scattered,
                     attenuation: *albedo,
                 })
+            }
+            Material::Metal(albedo, fuzz) => {
+                let reflected = ray.direction.reflect(intersection.normal);
+
+                let scattered = Ray {
+                    origin: ray.origin,
+                    direction: reflected + (random_in_unit_sphere() * (*fuzz)),
+                };
+
+                if scattered.direction.dot(intersection.normal) > 0.0 {
+                    Some(Scattered {
+                        scattered,
+                        attenuation: *albedo,
+                    })
+                } else {
+                    None
+                }
             }
         }
     }
