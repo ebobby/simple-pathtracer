@@ -1,3 +1,4 @@
+pub mod reversed_normal;
 pub mod sphere;
 
 use crate::material::Material;
