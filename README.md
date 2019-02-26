@@ -8,6 +8,6 @@ I also have a ray tracer and I intend to explore the difference between both tec
 
 ## Some pictures generated
 
-![1000 samples](/images/1000.png?raw=true "1000 samples")
-![50 samples](/images/50.png?raw=true "50 samples")
-![1 sample](/images/1.png?raw=true "1 sample")
+![10,000 samples](/images/10000.png?raw=true "10000 samples")
+![5,000 samples](/images/5000.png?raw=true "5000 samples")
+![2,000 sample](/images/2000.png?raw=true "2000 sample")
