@@ -8,6 +8,7 @@ pub enum Material {
     None,
     Lambertian(Color),
     Metal(Color, f64),
+    DiffuseLight(Color),
 }
 
 #[derive(Debug)]
@@ -33,9 +34,19 @@ fn random_in_unit_sphere() -> Vec3 {
 }
 
 impl Material {
-    pub fn scatter(&self, _ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    pub fn emit(&self) -> Color {
+        if let Material::DiffuseLight(color) = self {
+            *color
+        }
+        else {
+            Color::black()
+        }
+    }
+
+    pub fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
         match self {
             Material::None => None,
+            Material::DiffuseLight(_) => None,
             Material::Lambertian(albedo) => {
                 let target = intersection.p + intersection.normal + random_in_unit_sphere();
                 let scattered = Ray {

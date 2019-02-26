@@ -122,15 +122,14 @@ fn color(scene: &Scene, ray: Ray, depth: u32) -> Color {
     }
 
     if let Some(intersection) = scene.objects.intersect(ray) {
+        let emitted = intersection.material.emit();
+
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
-            scattered.attenuation * color(scene, scattered.scattered, depth + 1)
+            emitted + scattered.attenuation * color(scene, scattered.scattered, depth + 1)
         } else {
-            Color::black()
+            emitted
         }
     } else {
-        let unit_direction = ray.direction.normalize();
-        let t = (unit_direction.y + 1.0) * 0.5;
-
-        Color::new(1.0, 1.0, 1.0) * (1.0 - t) + Color::new(0.5, 0.7, 1.0) * t
+        Color::black()
     }
 }
