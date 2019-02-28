@@ -7,7 +7,6 @@ use crate::vector::Vec3;
 pub enum Material {
     None,
     Lambertian(Color),
-    Isotropic(Color),
     Dielectric(f64),
     Metal(Color, f64),
     DiffuseLight(Color),
@@ -97,17 +96,6 @@ impl Material {
                     None
                 }
             }
-            Material::Isotropic(albedo) => {
-                let scattered = Ray {
-                    origin: intersection.p,
-                    direction: random_in_unit_sphere(),
-                };
-
-                Some(Scattered {
-                    scattered,
-                    attenuation: *albedo,
-                })
-            },
             Material::Dielectric(refractive_index) => {
                 let mut refracted = Vec3::zero();
                 let outward_normal;
