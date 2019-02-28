@@ -1,4 +1,4 @@
-use std::ops::{Add, Mul, Neg, Sub};
+use std::ops::{Add, Div, Mul, Neg, Sub};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct Vec3 {
@@ -46,7 +46,7 @@ impl Vec3 {
     }
 
     pub fn reflect(&self, other: Vec3) -> Vec3 {
-        *self - other * (*self).dot(other) * 2.0
+        *self - other * 2.0 * (*self).dot(other)
     }
 
     /// Due to numerical precision sometimes we need to nudge vectors
@@ -92,6 +92,18 @@ impl Mul<f64> for Vec3 {
     }
 }
 
+impl Mul<Vec3> for f64 {
+    type Output = Vec3;
+
+    fn mul(self, factor: Vec3) -> Vec3 {
+        Vec3 {
+            x: self * factor.x,
+            y: self * factor.y,
+            z: self * factor.z,
+        }
+    }
+}
+
 impl Mul for Vec3 {
     type Output = Self;
 
@@ -112,6 +124,19 @@ impl Neg for Vec3 {
             x: -self.x,
             y: -self.y,
             z: -self.z,
+        }
+    }
+}
+
+
+impl Div<f64> for Vec3 {
+    type Output = Self;
+
+    fn div(self, rhs: f64) -> Vec3 {
+        Vec3 {
+            x: self.x / rhs,
+            y: self.y / rhs,
+            z: self.z / rhs,
         }
     }
 }
