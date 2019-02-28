@@ -46,7 +46,7 @@ impl Vec3 {
     }
 
     pub fn reflect(&self, other: Vec3) -> Vec3 {
-        *self - other * other.dot(*self) * 2.0
+        *self - other * (*self).dot(other) * 2.0
     }
 
     /// Due to numerical precision sometimes we need to nudge vectors
