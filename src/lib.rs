@@ -117,15 +117,15 @@ pub fn render(
 }
 
 fn color(scene: &Scene, ray: Ray, depth: u32) -> Color {
-    if depth >= 50 {
-        return Color::black();
-    }
-
     if let Some(intersection) = scene.objects.intersect(ray) {
         let emitted = intersection.material.emit();
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
-            emitted + scattered.attenuation * color(scene, scattered.scattered, depth + 1)
+            if depth < 50 {
+                emitted + scattered.attenuation * color(scene, scattered.scattered, depth + 1)
+            } else {
+                emitted
+            }
         } else {
             emitted
         }
