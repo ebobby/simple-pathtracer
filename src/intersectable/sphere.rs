@@ -11,7 +11,7 @@ pub struct Sphere {
 }
 
 impl Intersectable for Sphere {
-    fn intersect(&self, ray: Ray) -> Option<f64> {
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
         let oc = ray.origin - self.center;
         let a = ray.direction.dot(ray.direction);
         let b = 2.0 * oc.dot(ray.direction);
@@ -26,11 +26,11 @@ impl Intersectable for Sphere {
             let t0 = (-b - dis_sqrt) * divisor;
             let t1 = (-b + dis_sqrt) * divisor;
 
-            if t0 < std::f64::INFINITY && t0 > std::f64::EPSILON {
+            if t0 < max && t0 > min {
                 return Some(t0);
             }
 
-            if t1 < std::f64::INFINITY && t1 > std::f64::EPSILON {
+            if t1 < max && t1 > min {
                 return Some(t1);
             }
         }
@@ -43,6 +43,6 @@ impl Intersectable for Sphere {
     }
 
     fn normal(&self, point: Vec3) -> Vec3 {
-        (point - self.center).normalize()
+        (point - self.center) / self.radius
     }
 }

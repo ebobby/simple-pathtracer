@@ -9,8 +9,8 @@ pub struct ReversedNormal {
 }
 
 impl Intersectable for ReversedNormal {
-    fn intersect(&self, ray: Ray) -> Option<f64> {
-        self.intersectable.intersect(ray)
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
+        self.intersectable.intersect(ray, min, max)
     }
 
     fn material(&self) -> Material {

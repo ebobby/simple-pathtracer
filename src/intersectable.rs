@@ -9,7 +9,7 @@ use std::fmt::Debug;
 use std::marker::{Send, Sync};
 
 pub trait Intersectable: Debug + Send + Sync {
-    fn intersect(&self, ray: Ray) -> Option<f64>;
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64>;
     fn normal(&self, point: Vec3) -> Vec3;
     fn material(&self) -> Material;
 }
@@ -45,13 +45,11 @@ impl IntersectableList {
         let mut material = Material::None;
 
         for object in &self.intersectables {
-            if let Some(dist) = object.intersect(ray) {
-                if dist < t {
-                    t = dist;
-                    p = ray.origin + (ray.direction * t);
-                    normal = object.normal(p);
-                    material = object.material();
-                }
+            if let Some(dist) = object.intersect(ray, std::f64::EPSILON, t) {
+                t = dist;
+                p = ray.origin + (ray.direction * t);
+                normal = object.normal(p);
+                material = object.material();
             }
         }
 
