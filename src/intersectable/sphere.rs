@@ -5,14 +5,14 @@ use crate::vector::Vec3;
 
 #[derive(Debug)]
 pub struct Sphere {
-    pub position: Vec3,
+    pub center: Vec3,
     pub radius: f64,
     pub material: Material,
 }
 
 impl Intersectable for Sphere {
     fn intersect(&self, ray: Ray) -> Option<f64> {
-        let oc = ray.origin - self.position;
+        let oc = ray.origin - self.center;
         let a = ray.direction.dot(ray.direction);
         let b = 2.0 * oc.dot(ray.direction);
         let c = oc.dot(oc) - self.radius * self.radius;
@@ -43,6 +43,6 @@ impl Intersectable for Sphere {
     }
 
     fn normal(&self, point: Vec3) -> Vec3 {
-        (point - self.position).normalize()
+        (point - self.center).normalize()
     }
 }
