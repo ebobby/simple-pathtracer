@@ -33,6 +33,7 @@ fn random_in_unit_sphere() -> Vec3 {
         }
     }
 }
+
 fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
     let uv = v.normalize();
     let dt = uv.dot(n);
@@ -69,9 +70,10 @@ impl Material {
             Material::DiffuseLight(_) => None,
             Material::Lambertian(albedo) => {
                 let target = intersection.p + intersection.normal + random_in_unit_sphere();
+
                 let scattered = Ray {
                     origin: intersection.p,
-                    direction: (target - intersection.p).normalize(),
+                    direction: target - intersection.p
                 };
 
                 Some(Scattered {
@@ -80,10 +82,10 @@ impl Material {
                 })
             }
             Material::Metal(albedo, fuzz) => {
-                let reflected = ray.direction.reflect(intersection.normal);
+                let reflected = ray.direction.normalize().reflect(intersection.normal);
 
                 let scattered = Ray {
-                    origin: ray.origin,
+                    origin: ray.origin,// + (intersection.normal * std::f64::EPSILON),
                     direction: reflected + (random_in_unit_sphere() * (*fuzz)),
                 };
 
@@ -112,17 +114,16 @@ impl Material {
                 if ray.direction.dot(intersection.normal) > 0.0 {
                     outward_normal = -intersection.normal;
                     ni_over_nt = *refractive_index;
-                    cosine = refractive_index * ray.direction.dot(intersection.normal)
-                        / ray.direction.length();
+                    cosine = ray.direction.normalize().dot(intersection.normal);
                 } else {
                     outward_normal = intersection.normal;
                     ni_over_nt = refractive_index.recip();
-                    cosine = -ray.direction.dot(intersection.normal) / ray.direction.length();
+                    cosine = -ray.direction.normalize().dot(intersection.normal);
                 }
 
                 if let Some(r) = refract(ray.direction, outward_normal, ni_over_nt) {
-                    reflect_probability = schlick(cosine, *refractive_index);
                     refracted = r;
+                    reflect_probability = schlick(cosine, *refractive_index);
                 } else {
                     reflect_probability = 1.0;
                 }
@@ -130,13 +131,13 @@ impl Material {
                 if rand::random::<f64>() < reflect_probability {
                     scattered = Ray {
                         origin: intersection.p,
-                        direction: reflected.normalize(),
+                        direction: reflected,
                     };
                 }
                 else {
                     scattered = Ray {
                         origin: intersection.p,
-                        direction: refracted.normalize(),
+                        direction: refracted,
                     };
                 }
 

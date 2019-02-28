@@ -47,7 +47,7 @@ impl IntersectableList {
         for object in &self.intersectables {
             if let Some(dist) = object.intersect(ray, std::f64::EPSILON, t) {
                 t = dist;
-                p = ray.origin + (ray.direction * t);
+                p = ray.origin + t * ray.direction;
                 normal = object.normal(p);
                 material = object.material();
             }
