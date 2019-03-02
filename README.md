@@ -8,7 +8,8 @@ I also have a ray tracer and I intend to explore the difference between both tec
 
 ## Some pictures generated
 
-![10,000 samples](/images/refracted-light.png?raw=true "10000 samples")
-![10,000 samples](/images/small-lights.png?raw=true "10000 sample")
-![5,000 samples](/images/side-balls.png?raw=true "5000 samples")
-![2,000 sample](/images/small-lights-side.png?raw=true "2000 sample")
+![1](/images/refracted-light.png?raw=true)
+![2](/images/small-lights.png?raw=true)
+![3](/images/side-balls.png?raw=true)
+![4](/images/small-lights-side.png?raw=true)
+![4](/images/nice-balls.png?raw=true)
