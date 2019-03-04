@@ -73,7 +73,7 @@ impl Material {
 
                 let scattered = Ray {
                     origin: intersection.p,
-                    direction: target - intersection.p
+                    direction: target - intersection.p,
                 };
 
                 Some(Scattered {
@@ -85,7 +85,7 @@ impl Material {
                 let reflected = ray.direction.normalize().reflect(intersection.normal);
 
                 let scattered = Ray {
-                    origin: ray.origin,// + (intersection.normal * std::f64::EPSILON),
+                    origin: ray.origin,
                     direction: reflected + (random_in_unit_sphere() * (*fuzz)),
                 };
 
@@ -133,8 +133,7 @@ impl Material {
                         origin: intersection.p,
                         direction: reflected,
                     };
-                }
-                else {
+                } else {
                     scattered = Ray {
                         origin: intersection.p,
                         direction: refracted,

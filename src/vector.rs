@@ -128,7 +128,6 @@ impl Neg for Vec3 {
     }
 }
 
-
 impl Div<f64> for Vec3 {
     type Output = Self;
 
