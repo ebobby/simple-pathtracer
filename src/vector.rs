@@ -46,13 +46,13 @@ impl Vec3 {
     }
 
     pub fn reflect(&self, other: Vec3) -> Vec3 {
-        *self - other * 2.0 * (*self).dot(other)
+        *self - 2.0 * (*self).dot(other) * other
     }
 
     /// Due to numerical precision sometimes we need to nudge vectors
     /// a little bit into a given direction.
     pub fn correct(&self, other: Vec3) -> Vec3 {
-        *self + (other * crate::EPSILON)
+        *self + (other * std::f64::EPSILON)
     }
 }
 

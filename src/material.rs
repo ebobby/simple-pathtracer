@@ -41,7 +41,7 @@ fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
     let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
 
     if discriminant > 0.0 {
-        Some((uv - n * dt) * ni_over_nt - n * discriminant.sqrt())
+        Some(ni_over_nt * (uv - n * dt) - n * discriminant.sqrt())
     } else {
         None
     }

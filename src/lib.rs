@@ -20,8 +20,6 @@ use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
 use threadpool::ThreadPool;
 
-const EPSILON: f64 = 1e-6;
-
 pub fn render(
     scene: Scene,
     width: u32,
