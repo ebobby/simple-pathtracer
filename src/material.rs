@@ -85,7 +85,7 @@ impl Material {
                 let reflected = ray.direction.normalize().reflect(intersection.normal);
 
                 let scattered = Ray {
-                    origin: ray.origin,
+                    origin: intersection.p,
                     direction: reflected + (random_in_unit_sphere() * (*fuzz)),
                 };
 
