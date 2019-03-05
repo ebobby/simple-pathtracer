@@ -1,3 +1,4 @@
+pub mod plane;
 pub mod reversed_normal;
 pub mod sphere;
 
