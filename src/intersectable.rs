@@ -6,6 +6,10 @@ use crate::material::Material;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
+pub use plane::Plane;
+pub use reversed_normal::ReversedNormal;
+pub use sphere::Sphere;
+
 use std::fmt::Debug;
 use std::marker::{Send, Sync};
 
