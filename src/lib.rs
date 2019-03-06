@@ -25,6 +25,7 @@ pub fn render(
     width: u32,
     height: u32,
     samples: u32,
+    max_depth: u32,
     gamma: f64,
     workers: usize,
     filename: &str,
@@ -52,8 +53,8 @@ pub fn render(
 
     println!("Simple path tracer.");
     println!(
-        "Rendering a {}x{} image, {} samples per pixel using {} workers.",
-        width, height, samples, workers
+        "Rendering a {}x{}x{}spp image, max depth of {}, using {} workers.",
+        width, height, samples, max_depth, workers
     );
     println!();
 
@@ -75,7 +76,7 @@ pub fn render(
 
                     let ray = scene.camera.get_ray(u, v);
 
-                    pixel_color += color(scene.as_ref(), ray, 1);
+                    pixel_color += color(scene.as_ref(), ray, 1, max_depth);
                 }
 
                 pixel_color = pixel_color * s;
@@ -114,13 +115,15 @@ pub fn render(
     );
 }
 
-fn color(scene: &Scene, ray: Ray, depth: u32) -> Color {
+fn color(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
     if let Some(intersection) = scene.objects.intersect(ray) {
         let emitted = intersection.material.emit();
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
-            if depth < 50 {
-                emitted + scattered.attenuation * color(scene, scattered.scattered, depth + 1)
+            if depth < 100 {
+                emitted
+                    + scattered.attenuation
+                        * color(scene, scattered.scattered, depth + 1, max_depth)
             } else {
                 emitted
             }
