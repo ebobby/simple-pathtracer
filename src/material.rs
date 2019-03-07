@@ -19,19 +19,17 @@ pub struct Scattered {
 }
 
 fn random_in_unit_sphere() -> Vec3 {
-    let one = Vec3::new(1., 1., 1.);
+    let u = rand::random::<f64>();
+    let v = rand::random::<f64>();
+    let theta = u * 2.0 * std::f64::consts::PI;
+    let phi = (2.0 * v - 1.0).acos();
+    let r = rand::random::<f64>().cbrt();
+    let sin_theta = theta.sin();
+    let cos_theta = theta.cos();
+    let sin_phi = phi.sin();
+    let cos_phi = phi.cos();
 
-    loop {
-        let p = Vec3::new(
-            rand::random::<f64>(),
-            rand::random::<f64>(),
-            rand::random::<f64>(),
-        ) * 2.0
-            - one;
-        if p.norm() >= 1.0 {
-            break p;
-        }
-    }
+    Vec3::new(r * sin_phi * cos_theta, r * sin_phi * sin_theta, cos_phi)
 }
 
 fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
