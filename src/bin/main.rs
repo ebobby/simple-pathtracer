@@ -102,8 +102,9 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let red = Color::new(0.65, 0.05, 0.05);
     let white = Color::new(0.73, 0.73, 0.73);
     let green = Color::new(0.12, 0.45, 0.15);
-    //let light = Color::new(15.0, 15.0, 15.0);
-    let light = Color::from_u8(255, 160, 122) * 20.0;
+    let blue = Color::new(0.05, 0.05, 0.65);
+    let gold = Color::from_u8(255, 215, 0);
+    let light = Color::white() * 15.0;
 
     // light
     list.push(Box::new(Disc {
@@ -111,18 +112,6 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
         normal: Vec3::new(0.0, -1.0, 0.0),
         radius: 1.5,
         material: Material::DiffuseLight(light),
-    }));
-    list.push(Box::new(Disc {
-        center: Vec3::new(-5.0, 5.0, -5.0),
-        normal: Vec3::new(1.0, 0.0, 0.0),
-        radius: 1.5,
-        material: Material::DiffuseLight(Color::from_u8(100, 149, 237)),
-    }));
-    list.push(Box::new(Disc {
-        center: Vec3::new(5.0, 5.0, -5.0),
-        normal: Vec3::new(-1.0, 0.0, 0.0),
-        radius: 1.5,
-        material: Material::DiffuseLight(Color::from_u8(160, 32, 240) ),
     }));
 
     // right wall
@@ -170,7 +159,12 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(2.5, 2.0, -7.0),
         radius: 2.0,
-        material: Material::Metal(Color::white(), 0.25),
+        material: Material::Metal(gold, 0.25),
+    }));
+    list.push(Box::new(Sphere {
+        center: Vec3::new(3.8, 1.0, -2.5),
+        radius: 1.0,
+        material: Material::Lambertian(blue),
     }));
 
     let look_from = Vec3::new(0.0, 5.0, 10.0);
@@ -182,18 +176,55 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     }
 }
 
+fn test_scene(aspect_ratio: f64) -> Scene {
+    let mut list = IntersectableList::new();
+
+    // light
+    list.push(Box::new(Sphere {
+//        normal: Vec3::new(0.0, -1.0, 0.0),
+        center: Vec3::new(0.0, 15.0, -5.0),
+        radius: 3.0,
+        material: Material::DiffuseLight(Color::new(15.0, 15.0, 15.0)),
+    }));
+
+    // floor
+    //list.push(Box::new(Plane {
+    //    point: Vec3::new(0.0, 0.0, 0.0),
+    //    normal: Vec3::new(0.0, 1.0, 0.0),
+    //    material: Material::Lambertian(Color::new(0.5, 0.5, 0.5)),
+    //}));
+    list.push(Box::new(Sphere {
+        center: Vec3::new(0.0, -1000.0, 0.0),
+        radius: 1000.0,
+        material: Material::Lambertian(Color::new(0.5, 0.5, 0.5)),
+    }));
+
+    list.push(Box::new(Sphere {
+        center: Vec3::new(0.0, 0.0, 0.0),
+        radius: 5000.0,
+        material: Material::DiffuseLight(Color::new(0.4, 0.0, 0.4)),
+    }));
+
+    let look_from = Vec3::new(0.0, 100.0, -4.0);
+    let look_at = Vec3::new(0.0, 5.0, -5.0);
+
+    Scene {
+        camera: Camera::new(look_from, look_at, 50.0, aspect_ratio, 0.0),
+        objects: list,
+    }
+}
+
 fn main() {
-    let width = 640;
-    let height = 480;
-    let samples = 20;
+    let width = 1280;
+    let height = 720;
+    let samples = 5000;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
-    let max_depth = 10;
+    let max_depth = 50;
     let workers = 12;
 
     let scene = cornell_box(aspect_ratio);
     //let scene = raytracing_one_weekend(aspect_ratio);
-    //let scene = random_scene(aspect_ratio);
 
     pathtracer::render(
         scene,
