@@ -7,7 +7,7 @@ use crate::vector::Vec3;
 pub enum Material {
     None,
     Lambertian(Color),
-    Dielectric(f64),
+    Dielectric(Color, f64),
     Metal(Color, f64),
     DiffuseLight(Color),
 }
@@ -94,7 +94,7 @@ impl Material {
                     None
                 }
             }
-            Material::Dielectric(refractive_index) => {
+            Material::Dielectric(color, refractive_index) => {
                 let ref_idx = *refractive_index;
                 let mut refracted = Vec3::zero();
                 let outward_normal;
@@ -104,7 +104,7 @@ impl Material {
                 let reflect_probability;
                 let cosine;
 
-                let attenuation = Color::white();
+                let attenuation = *color;
 
                 let reflected = ray.direction.reflect(intersection.normal);
 
