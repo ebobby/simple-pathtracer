@@ -22,11 +22,11 @@ fn random_in_unit_sphere() -> Vec3 {
     let one = Vec3::new(1., 1., 1.);
 
     loop {
-        let p = (Vec3::new(
+        let p = Vec3::new(
             rand::random::<f64>(),
             rand::random::<f64>(),
             rand::random::<f64>(),
-        ) * 2.0)
+        ) * 2.0
             - one;
         if p.norm() >= 1.0 {
             break p;
