@@ -181,7 +181,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 
     let white = Color::new(0.53, 0.53, 0.53);
 
-    let spotlight_intensity = 25.0;
+    let spotlight_intensity = 20.0;
     for x in -4..5 {
         let x = f64::from(x);
 
@@ -189,25 +189,25 @@ fn test_scene(aspect_ratio: f64) -> Scene {
             center: Vec3::new(x, 0.0, -2.0),
             normal: Vec3::new(0.0, 1.0, 0.0),
             radius: 0.25,
-            material: Material::DiffuseLight(Color::new(1.0, 0.05, 0.05) * spotlight_intensity),
-        }));
-        list.push(Box::new(Disc {
-            center: Vec3::new(x, 0.0, -4.0),
-            normal: Vec3::new(0.0, 1.0, 0.0),
-            radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.05, 1.0, 0.05) * spotlight_intensity),
+            material: Material::DiffuseLight(Color::new(0.95, 0.15, 0.15) * spotlight_intensity),
         }));
         list.push(Box::new(Disc {
             center: Vec3::new(x, 0.0, -6.0),
             normal: Vec3::new(0.0, 0.0, 1.0),
             radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.05, 0.05, 1.0) * spotlight_intensity),
+            material: Material::DiffuseLight(Color::new(0.15, 0.15, 0.95) * spotlight_intensity),
+        }));
+        list.push(Box::new(Disc {
+            center: Vec3::new(x, 0.0, -4.0),
+            normal: Vec3::new(0.0, 1.0, 0.0),
+            radius: 0.25,
+            material: Material::DiffuseLight(Color::new(0.15, 0.95, 0.15) * spotlight_intensity),
         }));
         list.push(Box::new(Disc {
             center: Vec3::new(x, 0.0, -8.0),
             normal: Vec3::new(0.0, 1.0, 1.0),
             radius: 0.25,
-            material: Material::DiffuseLight(Color::new(1.0, 0.05, 1.0) * spotlight_intensity),
+            material: Material::DiffuseLight(Color::new(0.95, 0.05, 0.95) * spotlight_intensity),
         }));
     }
 
@@ -249,7 +249,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
     }));
 
     list.push(Box::new(Sphere {
-        center: Vec3::new(0.0, 5.0, -5.0),
+        center: Vec3::new(0.0, 4.0, -5.0),
         radius: 4.0,
         material: Material::Dielectric(Color::white(), 2.42),
     }));
@@ -266,7 +266,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 fn main() {
     let width = 1280;
     let height = 720;
-    let samples = 10000;
+    let samples = 5000;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 50;
