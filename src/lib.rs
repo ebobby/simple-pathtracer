@@ -120,10 +120,19 @@ fn color(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
         let emitted = intersection.material.emit();
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
+            let mut attenuation = scattered.attenuation;
+            let p = (attenuation.r + attenuation.g + attenuation.b) / 3.0;
+
+            if depth > 5 {
+                if rand::random::<f64>() < p {
+                    attenuation = attenuation / p;
+                } else {
+                    return emitted;
+                }
+            }
+
             if depth < 100 {
-                emitted
-                    + scattered.attenuation
-                        * color(scene, scattered.scattered, depth + 1, max_depth)
+                emitted + attenuation * color(scene, scattered.scattered, depth + 1, max_depth)
             } else {
                 emitted
             }
