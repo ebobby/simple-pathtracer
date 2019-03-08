@@ -45,7 +45,7 @@ pub fn render(
 
     let w = f64::from(width).recip();
     let h = f64::from(height).recip();
-    let s = f64::from(samples).recip();
+    let s = (f64::from(samples) * 4.0).recip();
 
     let pool = ThreadPool::new(workers);
 
@@ -70,13 +70,20 @@ pub fn render(
             pool.execute(move || {
                 let mut pixel_color = Color::black();
 
-                for _i in 0..samples {
-                    let u = (f64::from(x) + rand::random::<f64>()) * w;
-                    let v = (f64::from(y) + rand::random::<f64>()) * h;
+                for sy in 0..2 {
+                    for sx in 0..2 {
+                        for _i in 0..samples {
+                            let dx = tent_filter_factor();
+                            let dy = tent_filter_factor();
 
-                    let ray = scene.camera.get_ray(u, v);
+                            let u = ((f64::from(sx) + 0.5 + dx) * 0.5 + f64::from(x)) * w;
+                            let v = ((f64::from(sy) + 0.5 + dy) * 0.5 + f64::from(y)) * h;
 
-                    pixel_color += radiance(scene.as_ref(), ray, 1, max_depth);
+                            let ray = scene.camera.get_ray(u, v);
+
+                            pixel_color += radiance(scene.as_ref(), ray, 1, max_depth);
+                        }
+                    }
                 }
 
                 pixel_color = pixel_color * s;
@@ -141,5 +148,15 @@ fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
         }
     } else {
         Color::black()
+    }
+}
+
+fn tent_filter_factor() -> f64 {
+    let r = 2.0 * rand::random::<f64>();
+
+    if r < 1.0 {
+        r.sqrt() - 1.0
+    } else {
+        1.0 - (2.0 - r).sqrt()
     }
 }
