@@ -20,6 +20,23 @@ use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
 use threadpool::ThreadPool;
 
+/// Path tracer renderer
+///
+/// # Arguments
+///
+/// * `scene` - Scene to render
+/// * `width` - Width of the resulting image.
+/// * `height` - Height of the resulting image.
+/// * `samples` - Samples per pixel to take.
+/// * `max_depth` - Hard limit of ray bouncing for the scene.
+/// * `gamma` - Gamma value used for gamma correction of the final image.
+/// * `workers` - How many threads to use.
+/// * `image` - Filename of the saved image.
+///
+/// # Remarks
+/// The path tracer does subpixel sampling (4 samples) using a tent distribution so
+/// it traces `4 * samples` rays per pixel. It uses a russian roulette implementation to
+/// optimize how many rays are required to render a given pixel.
 pub fn render(
     scene: Scene,
     width: u32,
@@ -90,7 +107,7 @@ pub fn render(
 
                 let mut img = img.lock().unwrap();
 
-                img.put_pixel(x, y, pixel_color.gamma_rgb(gamma_correction));
+                img.put_pixel(x, y, pixel_color.to_gamma_rgb(gamma_correction));
 
                 work_count.fetch_add(1, Ordering::SeqCst);
             });

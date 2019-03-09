@@ -1,3 +1,4 @@
+//! Color module.
 use std::ops::{Add, AddAssign, Div, Mul};
 
 #[derive(Clone, Copy, Debug)]
@@ -28,7 +29,15 @@ impl Color {
         }
     }
 
-    pub fn gamma_rgb(&self, gamma_correction: f64) -> image::Rgb<u8> {
+    pub fn to_rgb(&self) -> image::Rgb<u8> {
+        image::Rgb([
+            (self.r.min(1.0).max(0.0) * 255.0) as u8,
+            (self.g.min(1.0).max(0.0) * 255.0) as u8,
+            (self.b.min(1.0).max(0.0) * 255.0) as u8,
+        ])
+    }
+
+    pub fn to_gamma_rgb(&self, gamma_correction: f64) -> image::Rgb<u8> {
         image::Rgb([
             (self.r.min(1.0).max(0.0).powf(gamma_correction) * 255.0) as u8,
             (self.g.min(1.0).max(0.0).powf(gamma_correction) * 255.0) as u8,
