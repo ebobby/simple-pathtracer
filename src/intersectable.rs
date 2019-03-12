@@ -1,6 +1,5 @@
 pub mod disc;
 pub mod plane;
-pub mod reversed_normal;
 pub mod sphere;
 
 use crate::material::Material;
@@ -9,7 +8,6 @@ use crate::vector::Vec3;
 
 pub use disc::Disc;
 pub use plane::Plane;
-pub use reversed_normal::ReversedNormal;
 pub use sphere::Sphere;
 
 use std::fmt::Debug;
