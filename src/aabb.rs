@@ -48,13 +48,26 @@ fn axis_intersect(
     tmin: f64,
     tmax: f64,
 ) -> bool {
-    let divisor = ray_d.recip();
+    let inv_d = ray_d.recip();
 
-    let t0 = ((min_val - ray_val) * divisor).min((max_val - ray_val) * divisor);
-    let t1 = ((min_val - ray_val) * divisor).max((max_val - ray_val) * divisor);
+    let mut t0 = (min_val - ray_val) * inv_d;
+    let mut t1 = (max_val - ray_val) * inv_d;
 
-    let min = tmin.max(t0);
-    let max = tmax.min(t1);
+    if inv_d < 0.0 {
+        std::mem::swap(&mut t0, &mut t1)
+    }
 
-    max > min
+    let tmin = if t0 > tmin {
+        t0
+    } else {
+        tmin
+    };
+
+    let tmax = if t1 < tmax {
+        t1
+    } else {
+        tmax
+    };
+
+    tmax > tmin
 }
