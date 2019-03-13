@@ -5,7 +5,6 @@ use crate::vector::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Material {
-    None,
     Lambertian(Color),
     Dielectric(Color, f64),
     Metal(Color, f64),
@@ -62,7 +61,6 @@ impl Material {
 
     pub fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
         match self {
-            Material::None => None,
             Material::DiffuseLight(_) => None,
             Material::Lambertian(albedo) => {
                 let target = intersection.p + intersection.normal + random_in_unit_sphere();
