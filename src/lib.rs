@@ -1,17 +1,21 @@
 #![allow(dead_code)]
 
-pub mod aabb;
-pub mod camera;
-pub mod color;
-pub mod intersectable;
-pub mod material;
-pub mod ray;
-pub mod scene;
-pub mod vector;
+mod aabb;
+mod color;
+mod material;
+mod ray;
+mod scene;
+mod vector;
 
-use color::Color;
+pub mod camera;
+pub mod intersectable;
+
+pub use color::Color;
+pub use material::Material;
+pub use scene::Scene;
+pub use vector::Vec3;
+
 use ray::Ray;
-use scene::Scene;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

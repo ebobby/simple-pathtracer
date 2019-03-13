@@ -31,19 +31,19 @@ pub struct Intersection {
 }
 
 #[derive(Debug, Default)]
-pub struct IntersectableList {
+pub struct List {
     intersectables: Vec<Hitable>,
 }
 
-impl IntersectableList {
-    pub fn new() -> IntersectableList {
-        IntersectableList {
+impl List {
+    pub fn new() -> Self {
+        Self {
             intersectables: Vec::new(),
         }
     }
 
-    pub fn from_vec(list: Vec<Hitable>) -> IntersectableList {
-        IntersectableList {
+    pub fn from_vec(list: Vec<Hitable>) -> Self {
+        Self {
             intersectables: list,
         }
     }

@@ -2,18 +2,14 @@
 #![allow(unused_imports)]
 
 use pathtracer::camera::Camera;
-use pathtracer::color::Color;
-use pathtracer::intersectable::Disc;
-use pathtracer::intersectable::Hitable;
-use pathtracer::intersectable::IntersectableList;
-use pathtracer::intersectable::Plane;
-use pathtracer::intersectable::Sphere;
-use pathtracer::material::Material;
-use pathtracer::scene::Scene;
-use pathtracer::vector::Vec3;
+use pathtracer::intersectable::*;
+use pathtracer::Color;
+use pathtracer::Material;
+use pathtracer::Scene;
+use pathtracer::Vec3;
 
 fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
-    let mut list = IntersectableList::new();
+    let mut list = List::new();
 
     list.push(Box::new(Sphere::new(
         Vec3::new(0.0, -1000.0, 0.0),
@@ -171,12 +167,12 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
 
     Scene {
         camera: Camera::new(look_from, look_at, 50.0, aspect_ratio, 0.0),
-        objects: IntersectableList::from_vec(objects),
+        objects: List::from_vec(objects),
     }
 }
 
 fn test_scene(aspect_ratio: f64) -> Scene {
-    let mut list = IntersectableList::new();
+    let mut list = List::new();
 
     list.push(Box::new(Sphere::new(
         Vec3::new(0.0, -5000.0, 0.0),
