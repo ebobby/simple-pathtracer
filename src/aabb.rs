@@ -14,60 +14,55 @@ impl Aabb {
         Aabb { min, max }
     }
 
-    pub fn intersect(&self, ray: Ray, min: f64, max: f64) -> bool {
-        axis_intersect(
-            self.min.x,
-            self.max.x,
-            ray.origin.x,
-            ray.direction.x,
-            min,
-            max,
-        ) && axis_intersect(
-            self.min.y,
-            self.max.y,
-            ray.origin.y,
-            ray.direction.y,
-            min,
-            max,
-        ) && axis_intersect(
-            self.min.z,
-            self.max.z,
-            ray.origin.z,
-            ray.direction.z,
-            min,
-            max,
-        )
+    pub fn intersect(&self, ray: Ray, tmin: f64, tmax: f64) -> bool {
+        // Check X axis
+        let mut inv_d = ray.direction.x.recip();
+        let mut t0 = (self.min.x - ray.origin.x) * inv_d;
+        let mut t1 = (self.max.x - ray.origin.x) * inv_d;
+
+        if inv_d < 0.0 {
+            std::mem::swap(&mut t0, &mut t1)
+        }
+
+        let tmin = if t0 > tmin { t0 } else { tmin };
+        let tmax = if t1 < tmax { t1 } else { tmax };
+
+        if tmax <= tmin {
+            return false;
+        }
+
+        // Check Y axis
+        inv_d = ray.direction.y.recip();
+        t0 = (self.min.y - ray.origin.y) * inv_d;
+        t1 = (self.max.y - ray.origin.y) * inv_d;
+
+        if inv_d < 0.0 {
+            std::mem::swap(&mut t0, &mut t1)
+        }
+
+        let tmin = if t0 > tmin { t0 } else { tmin };
+        let tmax = if t1 < tmax { t1 } else { tmax };
+
+        if tmax <= tmin {
+            return false;
+        }
+
+        // Check Z axis
+        inv_d = ray.direction.z.recip();
+        t0 = (self.min.z - ray.origin.z) * inv_d;
+        t1 = (self.max.z - ray.origin.z) * inv_d;
+
+        if inv_d < 0.0 {
+            std::mem::swap(&mut t0, &mut t1)
+        }
+
+        let tmin = if t0 > tmin { t0 } else { tmin };
+        let tmax = if t1 < tmax { t1 } else { tmax };
+
+        if tmax <= tmin {
+            return false;
+        }
+
+        true
     }
-}
-
-fn axis_intersect(
-    min_val: f64,
-    max_val: f64,
-    ray_val: f64,
-    ray_d: f64,
-    tmin: f64,
-    tmax: f64,
-) -> bool {
-    let inv_d = ray_d.recip();
-
-    let mut t0 = (min_val - ray_val) * inv_d;
-    let mut t1 = (max_val - ray_val) * inv_d;
-
-    if inv_d < 0.0 {
-        std::mem::swap(&mut t0, &mut t1)
-    }
-
-    let tmin = if t0 > tmin {
-        t0
-    } else {
-        tmin
-    };
-
-    let tmax = if t1 < tmax {
-        t1
-    } else {
-        tmax
-    };
-
-    tmax > tmin
 }
