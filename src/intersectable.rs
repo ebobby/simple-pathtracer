@@ -41,6 +41,12 @@ impl IntersectableList {
         }
     }
 
+    pub fn from_vec(list: Vec<Box<dyn Intersectable + Send>>) -> IntersectableList {
+        IntersectableList {
+            intersectables: list,
+        }
+    }
+
     pub fn push(&mut self, object: Box<dyn Intersectable + Send>) {
         self.intersectables.push(object);
     }

@@ -4,6 +4,7 @@
 use pathtracer::camera::Camera;
 use pathtracer::color::Color;
 use pathtracer::intersectable::Disc;
+use pathtracer::intersectable::Intersectable;
 use pathtracer::intersectable::IntersectableList;
 use pathtracer::intersectable::Plane;
 use pathtracer::intersectable::Sphere;
@@ -97,8 +98,6 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
 }
 
 fn cornell_box(aspect_ratio: f64) -> Scene {
-    let mut list = IntersectableList::new();
-
     let red = Color::new(0.65, 0.05, 0.05);
     let white = Color::new(0.73, 0.73, 0.73);
     let green = Color::new(0.12, 0.45, 0.15);
@@ -106,73 +105,73 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let gold = Color::from_u8(255, 215, 0);
     let light = Color::white() * 15.0;
 
-    // light
-    list.push(Box::new(Disc::new(
-        Vec3::new(0.0, 10.0, -5.0),
-        1.5,
-        Vec3::new(0.0, -1.0, 0.0),
-        Material::DiffuseLight(light),
-    )));
-
-    // right wall
-    list.push(Box::new(Plane::new(
-        Vec3::new(5.0, 0.0, 0.0),
-        Vec3::new(-1.0, 0.0, 0.0),
-        Material::Lambertian(green),
-    )));
-    // left wall
-    list.push(Box::new(Plane::new(
-        Vec3::new(-5.0, 0.0, 0.0),
-        Vec3::new(1.0, 0.0, 0.0),
-        Material::Lambertian(red),
-    )));
-    // ceiling
-    list.push(Box::new(Plane::new(
-        Vec3::new(0.0, 10.0, 0.0),
-        Vec3::new(0.0, -1.0, 0.0),
-        Material::Lambertian(white),
-    )));
-    // floor
-    list.push(Box::new(Plane::new(
-        Vec3::new(0.0, 0.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        Material::Lambertian(white),
-    )));
-    // back wall
-    list.push(Box::new(Plane::new(
-        Vec3::new(0.0, 0.0, -10.0),
-        Vec3::new(0.0, 0.0, 1.0),
-        Material::Lambertian(white),
-    )));
-    // back wall (behind the camera)
-    list.push(Box::new(Plane::new(
-        Vec3::new(0.0, 0.0, 10.0),
-        Vec3::new(0.0, 0.0, -1.0),
-        Material::Lambertian(white),
-    )));
-
-    list.push(Box::new(Sphere::new(
-        Vec3::new(-2.5, 2.0, -3.0),
-        2.0,
-        Material::Dielectric(Color::white(), 2.42),
-    )));
-    list.push(Box::new(Sphere::new(
-        Vec3::new(2.5, 2.0, -7.0),
-        2.0,
-        Material::Metal(gold, 0.25),
-    )));
-    list.push(Box::new(Sphere::new(
-        Vec3::new(3.8, 1.0, -2.5),
-        1.0,
-        Material::Lambertian(blue),
-    )));
+    let objects: Vec<Box<dyn Intersectable + Send>> = vec![
+        // light
+        Box::new(Disc::new(
+            Vec3::new(0.0, 10.0, -5.0),
+            1.5,
+            Vec3::new(0.0, -1.0, 0.0),
+            Material::DiffuseLight(light),
+        )),
+        // right wall
+        Box::new(Plane::new(
+            Vec3::new(5.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, 0.0),
+            Material::Lambertian(green),
+        )),
+        // left wall
+        Box::new(Plane::new(
+            Vec3::new(-5.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Material::Lambertian(red),
+        )),
+        // ceiling
+        Box::new(Plane::new(
+            Vec3::new(0.0, 10.0, 0.0),
+            Vec3::new(0.0, -1.0, 0.0),
+            Material::Lambertian(white),
+        )),
+        // floor
+        Box::new(Plane::new(
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            Material::Lambertian(white),
+        )),
+        // back wall
+        Box::new(Plane::new(
+            Vec3::new(0.0, 0.0, -10.0),
+            Vec3::new(0.0, 0.0, 1.0),
+            Material::Lambertian(white),
+        )),
+        // back wall (behind the camera)
+        Box::new(Plane::new(
+            Vec3::new(0.0, 0.0, 10.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Material::Lambertian(white),
+        )),
+        Box::new(Sphere::new(
+            Vec3::new(-2.5, 2.0, -3.0),
+            2.0,
+            Material::Dielectric(Color::white(), 2.42),
+        )),
+        Box::new(Sphere::new(
+            Vec3::new(2.5, 2.0, -7.0),
+            2.0,
+            Material::Metal(gold, 0.25),
+        )),
+        Box::new(Sphere::new(
+            Vec3::new(3.8, 1.0, -2.5),
+            1.0,
+            Material::Lambertian(blue),
+        )),
+    ];
 
     let look_from = Vec3::new(0.0, 5.0, 10.0);
     let look_at = Vec3::new(0.0, 5.0, 0.0);
 
     Scene {
         camera: Camera::new(look_from, look_at, 50.0, aspect_ratio, 0.0),
-        objects: list,
+        objects: IntersectableList::from_vec(objects),
     }
 }
 
@@ -208,7 +207,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 fn main() {
     let width = 640;
     let height = 480;
-    let samples = 5;
+    let samples = 10;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 10;
