@@ -35,9 +35,10 @@ use threadpool::ThreadPool;
 /// * `image` - Filename of the saved image.
 ///
 /// # Remarks
-/// The path tracer does subpixel sampling (4 samples) using a tent distribution so
-/// it traces `4 * samples` rays per pixel. It uses a russian roulette implementation to
-/// optimize how many rays are required to render a given pixel.
+/// The path tracer does subpixel sampling (4 samples) using a tent distribution
+/// so it traces `4 * samples` rays per pixel. It uses a russian roulette
+/// implementation to optimize how many rays are required to render a given
+/// pixel.
 pub fn render(
     scene: Scene,
     width: u32,

@@ -3,6 +3,13 @@ use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
+/// Material object.
+///
+/// # Notes
+/// Even though by convention all color components are assumed to be between 0.0
+/// and 1.0 and they're clamped when converted to `Rgb` it doens't mean they
+/// can't be declared to have larger values if needed to. This is usually the
+/// case for light intensity.
 #[derive(Clone, Copy, Debug)]
 pub enum Material {
     Lambertian(Color),
