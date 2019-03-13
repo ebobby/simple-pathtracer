@@ -1,16 +1,31 @@
 use super::Intersectable;
+use crate::aabb::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
 #[derive(Debug)]
 pub struct Plane {
-    pub point: Vec3,
-    pub normal: Vec3,
-    pub material: Material,
+    point: Vec3,
+    normal: Vec3,
+    material: Material,
+}
+
+impl Plane {
+    pub fn new(point: Vec3, normal: Vec3, material: Material) -> Plane {
+        Plane {
+            point,
+            normal,
+            material,
+        }
+    }
 }
 
 impl Intersectable for Plane {
+    fn bounding_box(&self) -> Option<Aabb> {
+        None
+    }
+
     fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
         let denom = self.normal.dot(ray.direction);
 

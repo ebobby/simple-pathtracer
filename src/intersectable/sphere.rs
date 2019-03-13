@@ -1,16 +1,33 @@
 use super::Intersectable;
+use crate::aabb::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
 #[derive(Debug)]
 pub struct Sphere {
-    pub center: Vec3,
-    pub radius: f64,
-    pub material: Material,
+    center: Vec3,
+    radius: f64,
+    material: Material,
+    bounding_box: Aabb,
+}
+
+impl Sphere {
+    pub fn new(center: Vec3, radius: f64, material: Material) -> Sphere {
+        Sphere {
+            center,
+            radius,
+            material,
+            bounding_box: sphere_bounding_box(center, radius),
+        }
+    }
 }
 
 impl Intersectable for Sphere {
+    fn bounding_box(&self) -> Option<Aabb> {
+        Some(self.bounding_box)
+    }
+
     fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
         let oc = ray.origin - self.center;
         let a = ray.direction.dot(ray.direction);
@@ -45,4 +62,10 @@ impl Intersectable for Sphere {
     fn normal(&self, point: Vec3) -> Vec3 {
         (point - self.center) / self.radius
     }
+}
+
+fn sphere_bounding_box(center: Vec3, radius: f64) -> Aabb {
+    let corner = Vec3::new(radius, radius, radius);
+
+    Aabb::new(center - corner, center + corner)
 }

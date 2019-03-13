@@ -14,11 +14,11 @@ use pathtracer::vector::Vec3;
 fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     let mut list = IntersectableList::new();
 
-    list.push(Box::new(Sphere {
-        center: Vec3::new(0.0, -1000.0, 0.0),
-        radius: 1000.0,
-        material: Material::Lambertian(Color::new(0.5, 0.5, 0.5)),
-    }));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(0.0, -1000.0, 0.0),
+        1000.0,
+        Material::Lambertian(Color::new(0.5, 0.5, 0.5)),
+    )));
 
     for a in -11..11 {
         for b in -11..11 {
@@ -32,20 +32,20 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
 
             if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
                 if choose_mat < 0.8 {
-                    list.push(Box::new(Sphere {
+                    list.push(Box::new(Sphere::new(
                         center,
-                        radius: 0.2,
-                        material: Material::Lambertian(Color::new(
+                        0.2,
+                        Material::Lambertian(Color::new(
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
                         )),
-                    }));
+                    )));
                 } else if choose_mat < 0.95 {
-                    list.push(Box::new(Sphere {
+                    list.push(Box::new(Sphere::new(
                         center,
-                        radius: 0.2,
-                        material: Material::Metal(
+                        0.2,
+                        Material::Metal(
                             Color::new(
                                 0.5 * (1.0 + rand::random::<f64>()),
                                 0.5 * (1.0 + rand::random::<f64>()),
@@ -53,39 +53,39 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                             ),
                             0.5 * rand::random::<f64>(),
                         ),
-                    }));
+                    )));
                 } else {
-                    list.push(Box::new(Sphere {
+                    list.push(Box::new(Sphere::new(
                         center,
-                        radius: 0.2,
-                        material: Material::Dielectric(Color::white(), 1.5),
-                    }));
+                        0.2,
+                        Material::Dielectric(Color::white(), 1.5),
+                    )));
                 }
             }
         }
     }
 
-    list.push(Box::new(Sphere {
-        center: Vec3::new(0.0, 1.0, 0.0),
-        radius: 1.0,
-        material: Material::Dielectric(Color::white(), 1.5),
-    }));
-    list.push(Box::new(Sphere {
-        center: Vec3::new(-4.0, 1.0, 0.0),
-        radius: 1.0,
-        material: Material::Lambertian(Color::new(0.4, 0.2, 0.1)),
-    }));
-    list.push(Box::new(Sphere {
-        center: Vec3::new(4.0, 1.0, 0.0),
-        radius: 1.0,
-        material: Material::Metal(Color::new(0.7, 0.6, 0.5), 0.0),
-    }));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(0.0, 1.0, 0.0),
+        1.0,
+        Material::Dielectric(Color::white(), 1.5),
+    )));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(-4.0, 1.0, 0.0),
+        1.0,
+        Material::Lambertian(Color::new(0.4, 0.2, 0.1)),
+    )));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(4.0, 1.0, 0.0),
+        1.0,
+        Material::Metal(Color::new(0.7, 0.6, 0.5), 0.0),
+    )));
 
-    list.push(Box::new(Sphere {
-        center: Vec3::new(0.0, 0.0, 0.0),
-        radius: 5000.0,
-        material: Material::DiffuseLight(Color::new(0.5, 0.5, 0.5)),
-    }));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(0.0, 0.0, 0.0),
+        5000.0,
+        Material::DiffuseLight(Color::new(0.5, 0.5, 0.5)),
+    )));
 
     let look_from = Vec3::new(13.0, 2.0, 3.0);
     let look_at = Vec3::new(0.0, 0.0, 0.0);
@@ -107,65 +107,65 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let light = Color::white() * 15.0;
 
     // light
-    list.push(Box::new(Disc {
-        center: Vec3::new(0.0, 10.0, -5.0),
-        normal: Vec3::new(0.0, -1.0, 0.0),
-        radius: 1.5,
-        material: Material::DiffuseLight(light),
-    }));
+    list.push(Box::new(Disc::new(
+        Vec3::new(0.0, 10.0, -5.0),
+        1.5,
+        Vec3::new(0.0, -1.0, 0.0),
+        Material::DiffuseLight(light),
+    )));
 
     // right wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(5.0, 0.0, 0.0),
-        normal: Vec3::new(-1.0, 0.0, 0.0),
-        material: Material::Lambertian(green),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(5.0, 0.0, 0.0),
+        Vec3::new(-1.0, 0.0, 0.0),
+        Material::Lambertian(green),
+    )));
     // left wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(-5.0, 0.0, 0.0),
-        normal: Vec3::new(1.0, 0.0, 0.0),
-        material: Material::Lambertian(red),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(-5.0, 0.0, 0.0),
+        Vec3::new(1.0, 0.0, 0.0),
+        Material::Lambertian(red),
+    )));
     // ceiling
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 10.0, 0.0),
-        normal: Vec3::new(0.0, -1.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(0.0, 10.0, 0.0),
+        Vec3::new(0.0, -1.0, 0.0),
+        Material::Lambertian(white),
+    )));
     // floor
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, 0.0),
-        normal: Vec3::new(0.0, 1.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(0.0, 0.0, 0.0),
+        Vec3::new(0.0, 1.0, 0.0),
+        Material::Lambertian(white),
+    )));
     // back wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, -10.0),
-        normal: Vec3::new(0.0, 0.0, 1.0),
-        material: Material::Lambertian(white),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(0.0, 0.0, -10.0),
+        Vec3::new(0.0, 0.0, 1.0),
+        Material::Lambertian(white),
+    )));
     // back wall (behind the camera)
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, 10.0),
-        normal: Vec3::new(0.0, 0.0, -1.0),
-        material: Material::Lambertian(white),
-    }));
+    list.push(Box::new(Plane::new(
+        Vec3::new(0.0, 0.0, 10.0),
+        Vec3::new(0.0, 0.0, -1.0),
+        Material::Lambertian(white),
+    )));
 
-    list.push(Box::new(Sphere {
-        center: Vec3::new(-2.5, 2.0, -3.0),
-        radius: 2.0,
-        material: Material::Dielectric(Color::white(), 2.42),
-    }));
-    list.push(Box::new(Sphere {
-        center: Vec3::new(2.5, 2.0, -7.0),
-        radius: 2.0,
-        material: Material::Metal(gold, 0.25),
-    }));
-    list.push(Box::new(Sphere {
-        center: Vec3::new(3.8, 1.0, -2.5),
-        radius: 1.0,
-        material: Material::Lambertian(blue),
-    }));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(-2.5, 2.0, -3.0),
+        2.0,
+        Material::Dielectric(Color::white(), 2.42),
+    )));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(2.5, 2.0, -7.0),
+        2.0,
+        Material::Metal(gold, 0.25),
+    )));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(3.8, 1.0, -2.5),
+        1.0,
+        Material::Lambertian(blue),
+    )));
 
     let look_from = Vec3::new(0.0, 5.0, 10.0);
     let look_at = Vec3::new(0.0, 5.0, 0.0);
@@ -179,82 +179,24 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
 fn test_scene(aspect_ratio: f64) -> Scene {
     let mut list = IntersectableList::new();
 
-    let white = Color::new(0.53, 0.53, 0.53);
+    list.push(Box::new(Sphere::new(
+        Vec3::new(0.0, -5000.0, 0.0),
+        5000.0,
+        Material::Lambertian(Color::from_u8(0x66, 0x33, 0x99)),
+    )));
+    list.push(Box::new(Disc::new(
+        Vec3::new(0.0, 50.0, 0.0),
+        10.0,
+        Vec3::new(0.0, -1.0, 0.0),
+        Material::DiffuseLight(Color::new(1.0, 1.0, 1.0) * 20.0),
+    )));
+    list.push(Box::new(Sphere::new(
+        Vec3::new(0.0, 5.0, 0.0),
+        3.0,
+        Material::Lambertian(Color::new(0.05, 0.95, 0.05)),
+    )));
 
-    let spotlight_intensity = 20.0;
-    for x in -4..5 {
-        let x = f64::from(x);
-
-        list.push(Box::new(Disc {
-            center: Vec3::new(x, 0.0, -2.0),
-            normal: Vec3::new(0.0, 1.0, 0.0),
-            radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.95, 0.15, 0.15) * spotlight_intensity),
-        }));
-        list.push(Box::new(Disc {
-            center: Vec3::new(x, 0.0, -6.0),
-            normal: Vec3::new(0.0, 0.0, 1.0),
-            radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.15, 0.15, 0.95) * spotlight_intensity),
-        }));
-        list.push(Box::new(Disc {
-            center: Vec3::new(x, 0.0, -4.0),
-            normal: Vec3::new(0.0, 1.0, 0.0),
-            radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.15, 0.95, 0.15) * spotlight_intensity),
-        }));
-        list.push(Box::new(Disc {
-            center: Vec3::new(x, 0.0, -8.0),
-            normal: Vec3::new(0.0, 1.0, 1.0),
-            radius: 0.25,
-            material: Material::DiffuseLight(Color::new(0.95, 0.05, 0.95) * spotlight_intensity),
-        }));
-    }
-
-    // right wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(5.0, 0.0, 0.0),
-        normal: Vec3::new(-1.0, 0.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
-    // left wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(-5.0, 0.0, 0.0),
-        normal: Vec3::new(1.0, 0.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
-    // ceiling
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 10.0, 0.0),
-        normal: Vec3::new(0.0, -1.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
-    // floor
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, 0.0),
-        normal: Vec3::new(0.0, 1.0, 0.0),
-        material: Material::Lambertian(white),
-    }));
-    // back wall
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, -10.0),
-        normal: Vec3::new(0.0, 0.0, 1.0),
-        material: Material::Lambertian(white),
-    }));
-    // back wall (behind the camera)
-    list.push(Box::new(Plane {
-        point: Vec3::new(0.0, 0.0, 10.0),
-        normal: Vec3::new(0.0, 0.0, -1.0),
-        material: Material::Lambertian(white),
-    }));
-
-    list.push(Box::new(Sphere {
-        center: Vec3::new(0.0, 4.0, -5.0),
-        radius: 4.0,
-        material: Material::Dielectric(Color::white(), 2.42),
-    }));
-
-    let look_from = Vec3::new(0.0, 5.0, 10.0);
+    let look_from = Vec3::new(0.0, 5.0, 20.0);
     let look_at = Vec3::new(0.0, 5.0, 0.0);
 
     Scene {
@@ -264,17 +206,17 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 }
 
 fn main() {
-    let width = 1280;
-    let height = 720;
-    let samples = 5000;
+    let width = 640;
+    let height = 480;
+    let samples = 5;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
-    let max_depth = 50;
-    let workers = 12;
+    let max_depth = 10;
+    let workers = 8;
 
-    let scene = cornell_box(aspect_ratio);
-    //let scene = raytracing_one_weekend(aspect_ratio);
-    //let scene = test_scene(aspect_ratio);
+    //    let scene = cornell_box(aspect_ratio);
+    let scene = raytracing_one_weekend(aspect_ratio);
+    //    let scene = test_scene(aspect_ratio);
 
     pathtracer::render(
         scene,
