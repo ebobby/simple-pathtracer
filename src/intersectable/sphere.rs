@@ -1,4 +1,5 @@
 use super::Intersectable;
+use super::Intersection;
 use crate::aabb::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
@@ -28,7 +29,7 @@ impl Intersectable for Sphere {
         Some(self.bounding_box)
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
         let oc = ray.origin - self.center;
         let a = ray.direction.dot(ray.direction);
         let b = 2.0 * oc.dot(ray.direction);
@@ -44,23 +45,29 @@ impl Intersectable for Sphere {
             let t1 = (-b + dis_sqrt) * divisor;
 
             if t0 < max && t0 > min {
-                return Some(t0);
+                let p = ray.origin + t0 * ray.direction;
+
+                return Some(Intersection {
+                    t: t0,
+                    p,
+                    normal: (p - self.center) / self.radius,
+                    material: self.material,
+                });
             }
 
             if t1 < max && t1 > min {
-                return Some(t1);
+                let p = ray.origin + t1 * ray.direction;
+
+                return Some(Intersection {
+                    t: t1,
+                    p,
+                    normal: (p - self.center) / self.radius,
+                    material: self.material,
+                });
             }
         }
 
         None
-    }
-
-    fn material(&self) -> Material {
-        self.material
-    }
-
-    fn normal(&self, point: Vec3) -> Vec3 {
-        (point - self.center) / self.radius
     }
 }
 

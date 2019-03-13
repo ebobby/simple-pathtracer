@@ -1,4 +1,5 @@
 use super::Intersectable;
+use super::Intersection;
 use crate::aabb::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
@@ -26,7 +27,7 @@ impl Intersectable for Plane {
         None
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64> {
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
         let denom = self.normal.dot(ray.direction);
 
         if denom.abs() > std::f64::EPSILON {
@@ -35,20 +36,17 @@ impl Intersectable for Plane {
             let distance = v.dot(self.normal) / denom;
 
             if distance < max && distance > min {
-                Some(distance)
+                Some(Intersection {
+                    t: distance,
+                    p: ray.origin + distance * ray.direction,
+                    normal: self.normal,
+                    material: self.material,
+                })
             } else {
                 None
             }
         } else {
             None
         }
-    }
-
-    fn material(&self) -> Material {
-        self.material
-    }
-
-    fn normal(&self, _point: Vec3) -> Vec3 {
-        self.normal
     }
 }

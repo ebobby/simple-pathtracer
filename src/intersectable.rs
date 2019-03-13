@@ -15,9 +15,7 @@ use std::fmt::Debug;
 use std::marker::{Send, Sync};
 
 pub trait Intersectable: Debug + Send + Sync {
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<f64>;
-    fn normal(&self, point: Vec3) -> Vec3;
-    fn material(&self) -> Material;
+    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection>;
     fn bounding_box(&self) -> Option<Aabb>;
 }
 
@@ -52,10 +50,8 @@ impl IntersectableList {
     }
 
     pub fn intersect(&self, ray: Ray) -> Option<Intersection> {
-        let mut normal = Vec3::zero();
         let mut t = std::f64::INFINITY;
-        let mut p = Vec3::zero();
-        let mut material = Material::None;
+        let mut intersection = None;
 
         for object in &self.intersectables {
             let box_hit = object
@@ -66,23 +62,12 @@ impl IntersectableList {
                 continue;
             }
 
-            if let Some(dist) = object.intersect(ray, std::f64::EPSILON, t) {
-                t = dist;
-                p = ray.origin + t * ray.direction;
-                normal = object.normal(p);
-                material = object.material();
+            if let Some(int) = object.intersect(ray, std::f64::EPSILON, t) {
+                intersection = Some(int);
+                t = int.t;
             }
         }
 
-        if t < std::f64::INFINITY {
-            Some(Intersection {
-                normal,
-                p,
-                t,
-                material,
-            })
-        } else {
-            None
-        }
+        intersection
     }
 }
