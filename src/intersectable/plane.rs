@@ -13,7 +13,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub fn new(point: Vec3, normal: Vec3, material: Material) -> Plane {
+    pub fn new(point: Vec3, normal: Vec3, material: Material) -> Self {
         Plane {
             point,
             normal,

@@ -16,19 +16,11 @@ pub struct Color {
 }
 
 impl Color {
-    pub fn new(r: f64, g: f64, b: f64) -> Color {
+    pub fn new(r: f64, g: f64, b: f64) -> Self {
         Color { r, g, b }
     }
 
-    pub fn black() -> Color {
-        Color::new(0., 0., 0.)
-    }
-
-    pub fn white() -> Color {
-        Color::new(1., 1., 1.)
-    }
-
-    pub fn from_u8(r: u8, g: u8, b: u8) -> Color {
+    pub fn from_u8(r: u8, g: u8, b: u8) -> Self {
         Color {
             r: f64::from(r) / 255.0,
             g: f64::from(g) / 255.0,

@@ -91,7 +91,7 @@ pub fn render(
             let work_count = Arc::clone(&work_count);
 
             pool.execute(move || {
-                let mut pixel_color = Color::black();
+                let mut pixel_color = Color::new(0.0, 0.0, 0.0);
 
                 for sy in 0..2 {
                     for sx in 0..2 {
@@ -170,7 +170,7 @@ fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
             emitted
         }
     } else {
-        Color::black()
+        Color::new(0.0, 0.0, 0.0)
     }
 }
 

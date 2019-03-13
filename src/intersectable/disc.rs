@@ -15,7 +15,7 @@ pub struct Disc {
 }
 
 impl Disc {
-    pub fn new(center: Vec3, radius: f64, normal: Vec3, material: Material) -> Disc {
+    pub fn new(center: Vec3, radius: f64, normal: Vec3, material: Material) -> Self {
         Disc {
             center,
             radius,

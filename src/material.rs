@@ -62,7 +62,7 @@ impl Material {
         if let Material::DiffuseLight(color) = self {
             *color
         } else {
-            Color::black()
+            Color::new(0.0, 0.0, 0.0)
         }
     }
 

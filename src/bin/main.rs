@@ -55,7 +55,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere::new(
                         center,
                         0.2,
-                        Material::Dielectric(Color::white(), 1.5),
+                        Material::Dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
                     )));
                 }
             }
@@ -65,7 +65,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere::new(
         Vec3::new(0.0, 1.0, 0.0),
         1.0,
-        Material::Dielectric(Color::white(), 1.5),
+        Material::Dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
     )));
     list.push(Box::new(Sphere::new(
         Vec3::new(-4.0, 1.0, 0.0),
@@ -99,7 +99,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let green = Color::new(0.12, 0.45, 0.15);
     let blue = Color::new(0.20, 0.20, 0.65);
     let gold = Color::from_u8(255, 215, 0);
-    let light = Color::white() * 15.0;
+    let light = Color::new(1.0, 1.0, 1.0) * 15.0;
 
     let objects: Vec<Hitable> = vec![
         // light
@@ -148,7 +148,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
         Box::new(Sphere::new(
             Vec3::new(-2.5, 2.0, -3.0),
             2.0,
-            Material::Dielectric(Color::white(), 2.42),
+            Material::Dielectric(Color::new(1.0, 1.0, 1.0), 2.42),
         )),
         Box::new(Sphere::new(
             Vec3::new(2.5, 2.0, -7.0),
