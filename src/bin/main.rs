@@ -4,7 +4,7 @@
 use pathtracer::camera::Camera;
 use pathtracer::color::Color;
 use pathtracer::intersectable::Disc;
-use pathtracer::intersectable::Intersectable;
+use pathtracer::intersectable::Hitable;
 use pathtracer::intersectable::IntersectableList;
 use pathtracer::intersectable::Plane;
 use pathtracer::intersectable::Sphere;
@@ -105,7 +105,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let gold = Color::from_u8(255, 215, 0);
     let light = Color::white() * 15.0;
 
-    let objects: Vec<Box<dyn Intersectable + Send>> = vec![
+    let objects: Vec<Hitable> = vec![
         // light
         Box::new(Disc::new(
             Vec3::new(0.0, 10.0, -5.0),

@@ -1,18 +1,21 @@
-pub mod disc;
-pub mod plane;
-pub mod sphere;
+mod disc;
+mod plane;
+mod sphere;
+
+pub use disc::Disc;
+pub use plane::Plane;
+pub use sphere::Sphere;
 
 use crate::aabb::Aabb;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
-pub use disc::Disc;
-pub use plane::Plane;
-pub use sphere::Sphere;
-
 use std::fmt::Debug;
 use std::marker::{Send, Sync};
+
+/// Hitable is a boxed trait object that implements `Intersectable`.
+pub type Hitable = Box<dyn Intersectable + Send + Sync>;
 
 pub trait Intersectable: Debug + Send + Sync {
     fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection>;
@@ -29,7 +32,7 @@ pub struct Intersection {
 
 #[derive(Debug, Default)]
 pub struct IntersectableList {
-    intersectables: Vec<Box<dyn Intersectable + Send>>,
+    intersectables: Vec<Hitable>,
 }
 
 impl IntersectableList {
@@ -39,13 +42,13 @@ impl IntersectableList {
         }
     }
 
-    pub fn from_vec(list: Vec<Box<dyn Intersectable + Send>>) -> IntersectableList {
+    pub fn from_vec(list: Vec<Hitable>) -> IntersectableList {
         IntersectableList {
             intersectables: list,
         }
     }
 
-    pub fn push(&mut self, object: Box<dyn Intersectable + Send>) {
+    pub fn push(&mut self, object: Hitable) {
         self.intersectables.push(object);
     }
 
