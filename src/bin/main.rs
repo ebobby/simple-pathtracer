@@ -92,7 +92,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
 
     Scene {
         camera: Camera::new(look_from, look_at, 20.0, aspect_ratio, 0.0),
-        objects: BVH::from_vec(list),
+        world: BVH::from_vec(list),
     }
 }
 
@@ -199,7 +199,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 
     Scene {
         camera: Camera::new(look_from, look_at, 50.0, aspect_ratio, 0.0),
-        objects: BVH::from_vec(objects),
+        world: BVH::from_vec(objects),
     }
 }
 

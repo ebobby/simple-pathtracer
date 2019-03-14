@@ -4,5 +4,5 @@ use super::camera::Camera;
 #[derive(Debug)]
 pub struct Scene {
     pub camera: Camera,
-    pub objects: BVH,
+    pub world: BVH,
 }
