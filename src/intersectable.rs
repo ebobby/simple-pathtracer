@@ -1,12 +1,4 @@
-mod disc;
-mod plane;
-mod sphere;
-
-pub use disc::Disc;
-pub use plane::Plane;
-pub use sphere::Sphere;
-
-use crate::aabb::Aabb;
+use crate::aabb::AABB;
 use crate::material::Material;
 use crate::ray::Ray;
 use crate::vector::Vec3;
@@ -19,7 +11,7 @@ pub type Hitable = Box<dyn Intersectable + Send + Sync>;
 
 pub trait Intersectable: Debug + Send + Sync {
     fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection>;
-    fn bounding_box(&self) -> Option<Aabb>;
+    fn bounding_box(&self) -> AABB;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -57,13 +49,13 @@ impl List {
         let mut intersection = None;
 
         for object in &self.intersectables {
-            let box_hit = object
-                .bounding_box()
-                .map_or(true, |aabb| aabb.intersect(ray, std::f64::EPSILON, t));
-
-            if !box_hit {
-                continue;
-            }
+//            let box_hit = object
+//                .bounding_box()
+//                .map_or(true, |aabb| aabb.intersect(ray, std::f64::EPSILON, t));
+//
+//            if !box_hit {
+//                continue;
+//            }
 
             if let Some(int) = object.intersect(ray, std::f64::EPSILON, t) {
                 intersection = Some(int);

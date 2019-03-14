@@ -9,12 +9,14 @@ mod vector;
 
 pub mod camera;
 pub mod intersectable;
+pub mod shape;
 
 pub use color::Color;
 pub use material::Material;
 pub use scene::Scene;
 pub use vector::Vec3;
 
+use intersectable::*;
 use ray::Ray;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -24,6 +26,9 @@ use std::time::{Duration, Instant};
 
 use indicatif::{ProgressBar, ProgressStyle};
 use threadpool::ThreadPool;
+
+/// Hitable is a boxed trait object that implements `Intersectable`.
+pub type Hitable = Box<dyn Intersectable + Send + Sync>;
 
 /// Path tracer renderer
 ///

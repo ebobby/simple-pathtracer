@@ -4,14 +4,25 @@ use crate::ray::Ray;
 use crate::vector::Vec3;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Aabb {
-    min: Vec3,
-    max: Vec3,
+pub struct AABB {
+    pub min: Vec3,
+    pub max: Vec3,
 }
 
-impl Aabb {
-    pub fn new(min: Vec3, max: Vec3) -> Self {
-        Aabb { min, max }
+impl AABB {
+    pub fn surrounding_box(box0: AABB, box1: AABB) -> AABB {
+        let min = Vec3 {
+            x: box0.min.x.min(box1.min.x),
+            y: box0.min.y.min(box1.min.y),
+            z: box0.min.z.min(box1.min.z),
+        };
+        let max = Vec3 {
+            x: box0.max.x.max(box1.max.x),
+            y: box0.max.y.max(box1.max.y),
+            z: box0.max.z.max(box1.max.z),
+        };
+
+        AABB { min, max }
     }
 
     pub fn intersect(&self, ray: Ray, tmin: f64, tmax: f64) -> bool {
