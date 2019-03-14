@@ -32,33 +32,28 @@ impl Intersectable for Sphere {
         let divisor = (2.0 * a).recip();
         let dis_sqrt = discriminant.sqrt();
 
-        if discriminant >= 0.0 {
+        if discriminant > 0.0 {
             let t0 = (-b - dis_sqrt) * divisor;
             let t1 = (-b + dis_sqrt) * divisor;
 
-            if t0 < max && t0 > min {
-                let p = ray.origin + t0 * ray.direction;
+            let t = if t0 < max && t0 > min {
+                t0
+            } else if t1 < max && t1 > min {
+                t1
+            } else {
+                return None;
+            };
 
-                return Some(Intersection {
-                    t: t0,
-                    p,
-                    normal: (p - self.center) / self.radius,
-                    material: self.material,
-                });
-            }
+            let p = ray.point_at(t);
 
-            if t1 < max && t1 > min {
-                let p = ray.origin + t1 * ray.direction;
-
-                return Some(Intersection {
-                    t: t1,
-                    p,
-                    normal: (p - self.center) / self.radius,
-                    material: self.material,
-                });
-            }
+            Some(Intersection {
+                p,
+                t,
+                normal: (p - self.center) / self.radius,
+                material: self.material,
+            })
+        } else {
+            None
         }
-
-        None
     }
 }

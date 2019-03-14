@@ -41,22 +41,7 @@ impl Vec3 {
     }
 
     pub fn normalize(&self) -> Vec3 {
-        let inv_len = self.length().recip();
-        Vec3 {
-            x: self.x * inv_len,
-            y: self.y * inv_len,
-            z: self.z * inv_len,
-        }
-    }
-
-    pub fn reflect(&self, other: Vec3) -> Vec3 {
-        *self - 2.0 * (*self).dot(other) * other
-    }
-
-    /// Due to numerical precision sometimes we need to nudge vectors
-    /// a little bit into a given direction.
-    pub fn correct(&self, other: Vec3) -> Vec3 {
-        *self + (other * std::f64::EPSILON)
+        *self / self.length()
     }
 }
 

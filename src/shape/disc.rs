@@ -33,10 +33,10 @@ impl Intersectable for Disc {
             let p = ray.origin + distance * ray.direction;
             let d = p - self.center;
 
-            if d.norm() <= self.radius * self.radius && distance < max && distance > min {
+            if d.norm() < self.radius * self.radius && distance < max && distance > min {
                 Some(Intersection {
                     t: distance,
-                    p: ray.origin + distance * ray.direction,
+                    p: ray.point_at(distance),
                     normal: self.normal,
                     material: self.material,
                 })
