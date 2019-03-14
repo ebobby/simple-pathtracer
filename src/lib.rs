@@ -154,7 +154,7 @@ pub fn render(
 }
 
 fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
-    if let Some(intersection) = scene.objects.intersect(ray, 0.0, std::f64::INFINITY) {
+    if let Some(intersection) = scene.objects.intersect(ray, 0.0001, std::f64::INFINITY) {
         let emitted = intersection.material.emit();
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
