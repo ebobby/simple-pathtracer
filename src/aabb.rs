@@ -10,7 +10,7 @@ pub struct AABB {
 }
 
 impl AABB {
-    pub fn surrounding_box(box0: AABB, box1: AABB) -> AABB {
+    pub fn surrounding(box0: AABB, box1: AABB) -> AABB {
         let min = Vec3 {
             x: box0.min.x.min(box1.min.x),
             y: box0.min.y.min(box1.min.y),

@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use pathtracer::camera::Camera;
-use pathtracer::intersectable::List;
 use pathtracer::shape::*;
+use pathtracer::Camera;
 use pathtracer::Color;
 use pathtracer::Hitable;
 use pathtracer::Material;
 use pathtracer::Scene;
 use pathtracer::Vec3;
+use pathtracer::BVH;
 
 fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     let mut list: Vec<Hitable> = Vec::new();
@@ -92,7 +92,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
 
     Scene {
         camera: Camera::new(look_from, look_at, 20.0, aspect_ratio, 0.0),
-        objects: List::from_vec(list),
+        objects: BVH::from_vec(list),
     }
 }
 
@@ -199,7 +199,7 @@ fn test_scene(aspect_ratio: f64) -> Scene {
 
     Scene {
         camera: Camera::new(look_from, look_at, 50.0, aspect_ratio, 0.0),
-        objects: List::from_vec(objects),
+        objects: BVH::from_vec(objects),
     }
 }
 
@@ -210,7 +210,7 @@ fn main() {
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 10;
-    let workers = 12;
+    let workers: usize = 12;
 
     //let scene = cornell_box(aspect_ratio);
     let scene = raytracing_one_weekend(aspect_ratio);

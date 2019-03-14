@@ -1,16 +1,19 @@
 #![allow(dead_code)]
 
 mod aabb;
+mod bvh;
+mod camera;
 mod color;
+mod intersectable;
 mod material;
 mod ray;
 mod scene;
 mod vector;
 
-pub mod camera;
-pub mod intersectable;
 pub mod shape;
 
+pub use bvh::BVH;
+pub use camera::Camera;
 pub use color::Color;
 pub use material::Material;
 pub use scene::Scene;
@@ -151,7 +154,7 @@ pub fn render(
 }
 
 fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
-    if let Some(intersection) = scene.objects.intersect(ray) {
+    if let Some(intersection) = scene.objects.intersect(ray, 0.0, std::f64::INFINITY) {
         let emitted = intersection.material.emit();
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
