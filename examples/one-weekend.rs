@@ -14,7 +14,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, -1000.0, 0.0),
         radius: 1000.0,
-        material: Material::Lambertian(Color::new(0.5, 0.5, 0.5)),
+        material: Material::lambertian(Color::new(0.5, 0.5, 0.5)),
     }));
 
     for a in -11..11 {
@@ -32,7 +32,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere {
                         center,
                         radius,
-                        material: Material::Lambertian(Color::new(
+                        material: Material::lambertian(Color::new(
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
@@ -42,7 +42,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere {
                         center,
                         radius,
-                        material: Material::Metal(
+                        material: Material::metal(
                             Color::new(
                                 0.5 * (1.0 + rand::random::<f64>()),
                                 0.5 * (1.0 + rand::random::<f64>()),
@@ -55,7 +55,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere {
                         center,
                         radius,
-                        material: Material::Dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
+                        material: Material::dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
                     }));
                 }
             }
@@ -65,23 +65,23 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::Dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
+        material: Material::dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
     }));
     list.push(Box::new(Sphere {
         center: Vec3::new(-4.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::Lambertian(Color::new(0.4, 0.2, 0.1)),
+        material: Material::lambertian(Color::new(0.4, 0.2, 0.1)),
     }));
     list.push(Box::new(Sphere {
         center: Vec3::new(4.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::Metal(Color::new(0.7, 0.6, 0.5), 0.0),
+        material: Material::metal(Color::new(0.7, 0.6, 0.5), 0.0),
     }));
 
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, 0.0, 0.0),
         radius: 5000.0,
-        material: Material::DiffuseLight(Color::new(0.5, 0.7, 1.0)),
+        material: Material::diffuse_light(Color::new(0.5, 0.7, 1.0)),
     }));
 
     let look_from = Vec3::new(13.0, 2.0, 3.0);

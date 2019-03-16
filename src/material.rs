@@ -3,6 +3,16 @@ use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::vector::Vec3;
 
+mod dielectric;
+mod diffuse_light;
+mod lambertian;
+mod metal;
+
+use dielectric::Dielectric;
+use diffuse_light::DiffuseLight;
+use lambertian::Lambertian;
+use metal::Metal;
+
 /// Material object.
 ///
 /// # Notes
@@ -12,10 +22,10 @@ use crate::vector::Vec3;
 /// case for light intensity.
 #[derive(Clone, Copy, Debug)]
 pub enum Material {
-    Lambertian(Color),
-    Dielectric(Color, f64),
-    Metal(Color, f64),
-    DiffuseLight(Color),
+    Lambertian(Lambertian),
+    Dielectric(Dielectric),
+    Metal(Metal),
+    DiffuseLight(DiffuseLight),
 }
 
 #[derive(Debug)]
@@ -24,93 +34,44 @@ pub struct Scattered {
     pub attenuation: Color,
 }
 
+pub trait Scatterable {
+    fn emit(&self) -> Color;
+    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered>;
+}
+
 impl Material {
+    pub fn lambertian(albedo: Color) -> Material {
+        Material::Lambertian(Lambertian { albedo })
+    }
+
+    pub fn metal(albedo: Color, fuzz: f64) -> Material {
+        Material::Metal(Metal { albedo, fuzz })
+    }
+
+    pub fn dielectric(attenuation: Color, refractive_index: f64) -> Material {
+        Material::Dielectric(Dielectric {
+            attenuation,
+            refractive_index,
+        })
+    }
+
+    pub fn diffuse_light(color: Color) -> Material {
+        Material::DiffuseLight(DiffuseLight { color })
+    }
+
     pub fn emit(&self) -> Color {
-        if let Material::DiffuseLight(color) = self {
-            *color
-        } else {
-            Color::new(0.0, 0.0, 0.0)
+        match *self {
+            Material::DiffuseLight(light) => light.emit(),
+            _ => Color::new(0.0, 0.0, 0.0),
         }
     }
 
     pub fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
         match self {
-            Material::DiffuseLight(_) => None,
-            Material::Lambertian(albedo) => {
-                let target = intersection.p + intersection.normal + random_in_unit_sphere();
-
-                let scattered = Ray {
-                    origin: intersection.p,
-                    direction: target - intersection.p,
-                };
-
-                Some(Scattered {
-                    scattered,
-                    attenuation: *albedo,
-                })
-            }
-            Material::Metal(albedo, fuzz) => {
-                let reflected = reflect(ray.direction.normalize(), intersection.normal);
-
-                let scattered = Ray {
-                    origin: intersection.p,
-                    direction: reflected + (*fuzz * random_in_unit_sphere()),
-                };
-
-                if scattered.direction.dot(intersection.normal) > 0.0 {
-                    Some(Scattered {
-                        scattered,
-                        attenuation: *albedo,
-                    })
-                } else {
-                    None
-                }
-            }
-            Material::Dielectric(color, refractive_index) => {
-                let ref_idx = *refractive_index;
-                let attenuation = *color;
-                let reflected = reflect(ray.direction.normalize(), intersection.normal);
-
-                let d = ray.direction.dot(intersection.normal);
-
-                let (outward_normal, ni_over_nt, cosine) = if d > 0.0 {
-                    (
-                        intersection.normal * -1.0,
-                        ref_idx,
-                        ref_idx * d / ray.direction.length(),
-                    )
-                } else {
-                    (
-                        intersection.normal,
-                        1.0/ref_idx,
-                        -1.0 * d / ray.direction.length(),
-                    )
-                };
-
-                let (refracted, reflect_probability) =
-                    if let Some(r) = refract(ray.direction, outward_normal, ni_over_nt) {
-                        (r, schlick(cosine, ref_idx))
-                    } else {
-                        (Vec3::zero(), 1.0)
-                    };
-
-                let scattered = if rand::random::<f64>() < reflect_probability {
-                    Ray {
-                        origin: intersection.p,
-                        direction: reflected,
-                    }
-                } else {
-                    Ray {
-                        origin: intersection.p,
-                        direction: refracted,
-                    }
-                };
-
-                Some(Scattered {
-                    scattered,
-                    attenuation,
-                })
-            }
+            Material::Lambertian(lambertian) => lambertian.scatter(ray, intersection),
+            Material::Metal(metal) => metal.scatter(ray, intersection),
+            Material::Dielectric(dielectric) => dielectric.scatter(ray, intersection),
+            Material::DiffuseLight(diffuse_light) => diffuse_light.scatter(ray, intersection),
         }
     }
 }
@@ -137,17 +98,11 @@ fn refract(v: Vec3, n: Vec3, ni_over_nt: f64) -> Option<Vec3> {
     let uv = v.normalize();
     let dt = uv.dot(n);
 
-    let discriminant = 1.0 - ni_over_nt*ni_over_nt * (1.0 - dt*dt);
+    let discriminant = 1.0 - ni_over_nt * ni_over_nt * (1.0 - dt * dt);
 
     if discriminant > 0.0 {
         Some(ni_over_nt * (uv - n * dt) - n * discriminant.sqrt())
     } else {
         None
     }
-}
-
-fn schlick(cosine: f64, ref_idx: f64) -> f64 {
-    let r0 = ((1.0 - ref_idx) / (1.0 + ref_idx)).powi(2);
-
-    r0 + (1.0 - r0) * (1.0 - cosine).powi(5)
 }
