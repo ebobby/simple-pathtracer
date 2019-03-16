@@ -1,12 +1,13 @@
 use super::{Scatterable, Scattered};
-use crate::color::Color;
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
+use crate::Color;
+use crate::Texture;
 use crate::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Dielectric {
-    pub attenuation: Color,
+    pub attenuation: Texture,
     pub refractive_index: f64,
 }
 
@@ -23,7 +24,9 @@ impl Scatterable for Dielectric {
 
     fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
         let ref_idx = self.refractive_index;
-        let attenuation = self.attenuation;
+        let attenuation = self
+            .attenuation
+            .value(intersection.u, intersection.v, intersection.p);
         let reflected = super::reflect(ray.direction.normalize(), intersection.normal);
 
         let d = ray.direction.dot(intersection.normal);

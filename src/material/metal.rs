@@ -1,11 +1,12 @@
 use super::{Scatterable, Scattered};
-use crate::color::Color;
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
+use crate::Color;
+use crate::Texture;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Metal {
-    pub albedo: Color,
+    pub albedo: Texture,
     pub fuzz: f64,
 }
 
@@ -25,7 +26,9 @@ impl Scatterable for Metal {
         if scattered.direction.dot(intersection.normal) > 0.0 {
             Some(Scattered {
                 scattered,
-                attenuation: self.albedo,
+                attenuation: self
+                    .albedo
+                    .value(intersection.u, intersection.v, intersection.p),
             })
         } else {
             None

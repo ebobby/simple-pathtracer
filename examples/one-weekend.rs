@@ -44,11 +44,11 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                         center,
                         radius,
                         material: Material::metal(
-                            Color::new(
+                            Texture::constant_color(Color::new(
                                 0.5 * (1.0 + rand::random::<f64>()),
                                 0.5 * (1.0 + rand::random::<f64>()),
                                 0.5 * (1.0 + rand::random::<f64>()),
-                            ),
+                            )),
                             0.5 * rand::random::<f64>(),
                         ),
                     }));
@@ -56,7 +56,10 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere {
                         center,
                         radius,
-                        material: Material::dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
+                        material: Material::dielectric(
+                            Texture::constant_color(Color::new(1.0, 1.0, 1.0)),
+                            1.5,
+                        ),
                     }));
                 }
             }
@@ -66,7 +69,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::dielectric(Color::new(1.0, 1.0, 1.0), 1.5),
+        material: Material::dielectric(Texture::constant_color(Color::new(1.0, 1.0, 1.0)), 1.5),
     }));
     list.push(Box::new(Sphere {
         center: Vec3::new(-4.0, 1.0, 0.0),
@@ -76,7 +79,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(4.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::metal(Color::new(0.7, 0.6, 0.5), 0.0),
+        material: Material::metal(Texture::constant_color(Color::new(0.7, 0.6, 0.5)), 0.0),
     }));
 
     list.push(Box::new(Sphere {

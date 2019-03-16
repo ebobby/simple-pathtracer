@@ -55,17 +55,20 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
         Box::new(Sphere {
             center: Vec3::new(-3.5, 2.0, -3.0),
             radius: 2.0,
-            material: Material::dielectric(Color::new(1.0, 1.0, 1.0), 1.52),
+            material: Material::dielectric(
+                Texture::constant_color(Color::new(1.0, 1.0, 1.0)),
+                1.52,
+            ),
         }),
         Box::new(Sphere {
             center: Vec3::new(3.5, 2.0, -7.0),
             radius: 2.0,
-            material: Material::metal(Color::new(0.05, 1.0, 0.05), 0.25),
+            material: Material::metal(Texture::constant_color(Color::new(0.05, 1.0, 0.05)), 0.25),
         }),
         Box::new(Sphere {
             center: Vec3::new(5.0, 1.0, 0.0),
             radius: 1.0,
-            material: Material::metal(Color::new(1.0, 0.05, 0.05), 0.0),
+            material: Material::metal(Texture::constant_color(Color::new(1.0, 0.05, 0.05)), 0.0),
         }),
     ];
 

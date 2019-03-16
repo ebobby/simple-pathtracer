@@ -45,11 +45,11 @@ impl Material {
         Material::Lambertian(Lambertian { albedo })
     }
 
-    pub fn metal(albedo: Color, fuzz: f64) -> Material {
+    pub fn metal(albedo: Texture, fuzz: f64) -> Material {
         Material::Metal(Metal { albedo, fuzz })
     }
 
-    pub fn dielectric(attenuation: Color, refractive_index: f64) -> Material {
+    pub fn dielectric(attenuation: Texture, refractive_index: f64) -> Material {
         Material::Dielectric(Dielectric {
             attenuation,
             refractive_index,
