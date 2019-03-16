@@ -4,6 +4,7 @@ use pathtracer::Color;
 use pathtracer::Hitable;
 use pathtracer::Material;
 use pathtracer::Scene;
+use pathtracer::Texture;
 use pathtracer::Vec3;
 use pathtracer::BVH;
 
@@ -19,52 +20,55 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
             center: Vec3::new(0.0, 10.0, -5.0),
             radius: 1.5,
             normal: Vec3::new(0.0, -1.0, 0.0),
-            material: Material::DiffuseLight(light),
+            material: Material::diffuse_light(light),
         }),
         // right wall
         Box::new(Sphere {
             center: Vec3::new(5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::Lambertian(blue),
+            material: Material::lambertian(Texture::constant_color(blue)),
         }),
         // left wall
         Box::new(Sphere {
             center: Vec3::new(-5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::Lambertian(red),
+            material: Material::lambertian(Texture::constant_color(red)),
         }),
         // ceiling
         Box::new(Sphere {
             center: Vec3::new(0.0, 5010.0, 0.0),
             radius: 5000.0,
-            material: Material::Lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // floor
         Box::new(Sphere {
             center: Vec3::new(0.0, -5000.0, 0.0),
             radius: 5000.0,
-            material: Material::Lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // back wall
         Box::new(Sphere {
             center: Vec3::new(0.0, 0.0, -5010.0),
             radius: 5000.0,
-            material: Material::Lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         Box::new(Sphere {
             center: Vec3::new(-3.5, 2.0, -3.0),
             radius: 2.0,
-            material: Material::Dielectric(Color::new(1.0, 1.0, 1.0), 1.52),
+            material: Material::dielectric(
+                Texture::constant_color(Color::new(1.0, 1.0, 1.0)),
+                1.52,
+            ),
         }),
         Box::new(Sphere {
             center: Vec3::new(3.5, 2.0, -7.0),
             radius: 2.0,
-            material: Material::Metal(Color::new(0.05, 1.0, 0.05), 0.25),
+            material: Material::metal(Texture::constant_color(Color::new(0.05, 1.0, 0.05)), 0.25),
         }),
         Box::new(Sphere {
             center: Vec3::new(5.0, 1.0, 0.0),
             radius: 1.0,
-            material: Material::Metal(Color::new(1.0, 0.05, 0.05), 0.0),
+            material: Material::metal(Texture::constant_color(Color::new(1.0, 0.05, 0.05)), 0.0),
         }),
     ];
 
@@ -80,7 +84,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
 fn main() {
     let width = 640;
     let height = 480;
-    let samples = 2500;
+    let samples = 25;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 50;
