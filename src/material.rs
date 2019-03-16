@@ -1,7 +1,8 @@
-use crate::color::Color;
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Vec3;
+use crate::Color;
+use crate::Texture;
 
 mod dielectric;
 mod diffuse_light;
@@ -40,7 +41,7 @@ pub trait Scatterable {
 }
 
 impl Material {
-    pub fn lambertian(albedo: Color) -> Material {
+    pub fn lambertian(albedo: Texture) -> Material {
         Material::Lambertian(Lambertian { albedo })
     }
 

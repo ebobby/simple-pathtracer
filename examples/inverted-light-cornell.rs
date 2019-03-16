@@ -4,6 +4,7 @@ use pathtracer::Color;
 use pathtracer::Hitable;
 use pathtracer::Material;
 use pathtracer::Scene;
+use pathtracer::Texture;
 use pathtracer::Vec3;
 use pathtracer::BVH;
 
@@ -12,6 +13,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let white = Color::new(0.75, 0.75, 0.75);
     let blue = Color::new(0.25, 0.25, 0.75);
     let light = Color::new(1.0, 1.0, 1.0) * 15.0;
+
 
     let objects: Vec<Hitable> = vec![
         // light
@@ -25,31 +27,31 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
         Box::new(Sphere {
             center: Vec3::new(5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(blue),
+            material: Material::lambertian(Texture::constant_color(blue)),
         }),
         // left wall
         Box::new(Sphere {
             center: Vec3::new(-5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(red),
+            material: Material::lambertian(Texture::constant_color(red)),
         }),
         // ceiling
         Box::new(Sphere {
             center: Vec3::new(0.0, 5010.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // floor
         Box::new(Sphere {
             center: Vec3::new(0.0, -5000.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // back wall
         Box::new(Sphere {
             center: Vec3::new(0.0, 0.0, -5010.0),
             radius: 5000.0,
-            material: Material::lambertian(white),
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         Box::new(Sphere {
             center: Vec3::new(-3.5, 2.0, -3.0),

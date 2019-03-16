@@ -37,6 +37,8 @@ impl Intersectable for Disc {
                 Some(Intersection {
                     t: distance,
                     p: ray.point_at(distance),
+                    u: 0.0,
+                    v: 0.0,
                     normal: self.normal,
                     material: self.material,
                 })

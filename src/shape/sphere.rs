@@ -45,15 +45,28 @@ impl Intersectable for Sphere {
             };
 
             let p = ray.point_at(t);
+            let normal = (p - self.center) / self.radius;
+            let (u, v) = sphere_texture_uv(normal);
 
             Some(Intersection {
                 p,
                 t,
-                normal: (p - self.center) / self.radius,
+                u,
+                v,
+                normal,
                 material: self.material,
             })
         } else {
             None
         }
     }
+}
+
+fn sphere_texture_uv(p: Vec3) -> (f64, f64) {
+    let phi = p.z.atan2(p.x);
+    let theta = p.y.asin();
+    let u = 1.0 - (phi + std::f64::consts::PI) / (2.0 * std::f64::consts::PI);
+    let v = (theta + std::f64::consts::PI / 2.0) / std::f64::consts::PI;
+
+    (u, v)
 }

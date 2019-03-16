@@ -4,6 +4,7 @@ use pathtracer::Color;
 use pathtracer::Hitable;
 use pathtracer::Material;
 use pathtracer::Scene;
+use pathtracer::Texture;
 use pathtracer::Vec3;
 use pathtracer::BVH;
 
@@ -14,7 +15,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, -1000.0, 0.0),
         radius: 1000.0,
-        material: Material::lambertian(Color::new(0.5, 0.5, 0.5)),
+        material: Material::lambertian(Texture::constant_color(Color::new(0.5, 0.5, 0.5))),
     }));
 
     for a in -11..11 {
@@ -32,11 +33,11 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
                     list.push(Box::new(Sphere {
                         center,
                         radius,
-                        material: Material::lambertian(Color::new(
+                        material: Material::lambertian(Texture::constant_color(Color::new(
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
                             rand::random::<f64>() * rand::random::<f64>(),
-                        )),
+                        ))),
                     }));
                 } else if choose_mat < 0.95 {
                     list.push(Box::new(Sphere {
@@ -70,7 +71,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(-4.0, 1.0, 0.0),
         radius: 1.0,
-        material: Material::lambertian(Color::new(0.4, 0.2, 0.1)),
+        material: Material::lambertian(Texture::constant_color(Color::new(0.4, 0.2, 0.1))),
     }));
     list.push(Box::new(Sphere {
         center: Vec3::new(4.0, 1.0, 0.0),

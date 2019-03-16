@@ -8,6 +8,7 @@ mod intersectable;
 mod material;
 mod ray;
 mod scene;
+mod texture;
 mod vector;
 
 pub mod shape;
@@ -17,6 +18,7 @@ pub use camera::Camera;
 pub use color::Color;
 pub use material::Material;
 pub use scene::Scene;
+pub use texture::Texture;
 pub use vector::Vec3;
 
 use intersectable::*;

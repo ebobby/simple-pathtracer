@@ -1,11 +1,12 @@
 use super::{Scatterable, Scattered};
-use crate::color::Color;
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
+use crate::Color;
+use crate::Texture;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Lambertian {
-    pub albedo: Color,
+    pub albedo: Texture,
 }
 
 impl Scatterable for Lambertian {
@@ -23,7 +24,7 @@ impl Scatterable for Lambertian {
 
         Some(Scattered {
             scattered,
-            attenuation: self.albedo,
+            attenuation: self.albedo.value(intersection.u, intersection.v, intersection.p),
         })
     }
 }
