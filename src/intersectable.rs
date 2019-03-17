@@ -24,11 +24,11 @@ pub trait Intersectable: Debug + Send + Sync {
 /// * `v` - Texture coordinates.
 /// * `material` - Material of the hit object.
 #[derive(Clone, Copy, Debug)]
-pub struct Intersection {
+pub struct Intersection<'a> {
     pub p: Vec3,
     pub t: f64,
     pub normal: Vec3,
     pub u: f64,
     pub v: f64,
-    pub material: Material,
+    pub material: &'a Material,
 }

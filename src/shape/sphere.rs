@@ -54,7 +54,7 @@ impl Intersectable for Sphere {
                 u,
                 v,
                 normal,
-                material: self.material,
+                material: &self.material,
             })
         } else {
             None
