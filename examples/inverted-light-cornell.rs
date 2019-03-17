@@ -20,7 +20,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
             center: Vec3::new(0.0, 0.0, -5.0),
             radius: 1.5,
             normal: Vec3::new(0.0, 1.0, 0.0),
-            material: Material::diffuse_light(light),
+            material: Material::diffuse_light(Texture::constant_color(light)),
         }),
         // right wall
         Box::new(Sphere {

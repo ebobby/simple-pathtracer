@@ -74,7 +74,7 @@ impl Intersectable for BVH {
         self.bounding_box
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
+    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection> {
         if !self.bounding_box.intersect(ray, min, max) {
             return None;
         }

@@ -2,7 +2,7 @@ use super::TextureObject;
 use crate::Color;
 use crate::Vec3;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Checker {
     pub squares: usize,
     pub even: Color,
@@ -17,7 +17,7 @@ impl TextureObject for Checker {
         match (is_even(x), is_even(y)) {
             (true, true) => self.even,
             (false, false) => self.even,
-            _ => self.odd
+            _ => self.odd,
         }
     }
 }

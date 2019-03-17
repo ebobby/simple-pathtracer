@@ -1,8 +1,8 @@
 use crate::aabb::AABB;
 use crate::intersectable::*;
-use crate::material::Material;
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Material;
+use crate::Vec3;
 
 #[derive(Debug)]
 pub struct Disc {
@@ -22,7 +22,7 @@ impl Intersectable for Disc {
         }
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
+    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection> {
         let denom = self.normal.dot(ray.direction);
 
         if denom.abs() > std::f64::EPSILON {
@@ -40,7 +40,7 @@ impl Intersectable for Disc {
                     u: 0.0,
                     v: 0.0,
                     normal: self.normal,
-                    material: self.material,
+                    material: &self.material,
                 })
             } else {
                 None

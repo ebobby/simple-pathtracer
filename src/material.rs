@@ -1,8 +1,8 @@
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
-use crate::Vec3;
 use crate::Color;
 use crate::Texture;
+use crate::Vec3;
 
 mod dielectric;
 mod diffuse_light;
@@ -21,7 +21,7 @@ use metal::Metal;
 /// and 1.0 and they're clamped when converted to `Rgb` it doens't mean they
 /// can't be declared to have larger values if needed to. This is usually the
 /// case for light intensity.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Material {
     Lambertian(Lambertian),
     Dielectric(Dielectric),
@@ -36,8 +36,8 @@ pub struct Scattered {
 }
 
 pub trait Scatterable {
-    fn emit(&self) -> Color;
-    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered>;
+    fn emit(&self, u: f64, v: f64, p: Vec3) -> Color;
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered>;
 }
 
 impl Material {
@@ -56,18 +56,18 @@ impl Material {
         })
     }
 
-    pub fn diffuse_light(color: Color) -> Material {
-        Material::DiffuseLight(DiffuseLight { color })
+    pub fn diffuse_light(texture: Texture) -> Material {
+        Material::DiffuseLight(DiffuseLight { texture })
     }
 
-    pub fn emit(&self) -> Color {
-        match *self {
-            Material::DiffuseLight(light) => light.emit(),
+    pub fn emit(&self, u: f64, v: f64, p: Vec3) -> Color {
+        match self {
+            Material::DiffuseLight(light) => light.emit(u, v, p),
             _ => Color::new(0.0, 0.0, 0.0),
         }
     }
 
-    pub fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    pub fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         match self {
             Material::Lambertian(lambertian) => lambertian.scatter(ray, intersection),
             Material::Metal(metal) => metal.scatter(ray, intersection),

@@ -3,19 +3,20 @@ use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
+use crate::Vec3;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Metal {
     pub albedo: Texture,
     pub fuzz: f64,
 }
 
 impl Scatterable for Metal {
-    fn emit(&self) -> Color {
+    fn emit(&self, _u: f64, _v: f64, _p: Vec3) -> Color {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         let reflected = super::reflect(ray.direction.normalize(), intersection.normal);
 
         let scattered = Ray {

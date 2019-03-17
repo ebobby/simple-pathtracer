@@ -1,8 +1,8 @@
 use crate::aabb::AABB;
 use crate::intersectable::*;
-use crate::material::Material;
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Material;
+use crate::Vec3;
 
 #[derive(Debug)]
 pub struct Sphere {
@@ -21,7 +21,7 @@ impl Intersectable for Sphere {
         }
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
+    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection> {
         let oc = ray.origin - self.center;
         let a = ray.direction.dot(ray.direction);
         let b = 2.0 * oc.dot(ray.direction);
@@ -54,7 +54,7 @@ impl Intersectable for Sphere {
                 u,
                 v,
                 normal,
-                material: self.material,
+                material: &self.material,
             })
         } else {
             None

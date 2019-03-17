@@ -1,7 +1,7 @@
 //! Camera module.
 
 use super::ray::Ray;
-use super::vector::Vec3;
+use super::Vec3;
 
 /// The objct that defines where to look from and where to inside the scene.
 #[derive(Debug)]

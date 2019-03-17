@@ -1,7 +1,7 @@
 //! Axis-aligned minimum bounding box.
 
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AABB {
@@ -25,7 +25,7 @@ impl AABB {
         AABB { min, max }
     }
 
-    pub fn intersect(&self, ray: Ray, tmin: f64, tmax: f64) -> bool {
+    pub fn intersect(&self, ray: &Ray, tmin: f64, tmax: f64) -> bool {
         // Check X axis
         let mut inv_d = ray.direction.x.recip();
         let mut t0 = (self.min.x - ray.origin.x) * inv_d;
