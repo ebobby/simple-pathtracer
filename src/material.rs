@@ -1,8 +1,8 @@
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
-use crate::Vec3;
 use crate::Color;
 use crate::Texture;
+use crate::Vec3;
 
 mod dielectric;
 mod diffuse_light;

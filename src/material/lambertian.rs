@@ -24,7 +24,9 @@ impl Scatterable for Lambertian {
 
         Some(Scattered {
             scattered,
-            attenuation: self.albedo.value(intersection.u, intersection.v, intersection.p),
+            attenuation: self
+                .albedo
+                .value(intersection.u, intersection.v, intersection.p),
         })
     }
 }

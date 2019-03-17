@@ -17,7 +17,7 @@ impl TextureObject for Checker {
         match (is_even(x), is_even(y)) {
             (true, true) => self.even,
             (false, false) => self.even,
-            _ => self.odd
+            _ => self.odd,
         }
     }
 }

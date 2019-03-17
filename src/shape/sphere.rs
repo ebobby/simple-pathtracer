@@ -1,8 +1,8 @@
 use crate::aabb::AABB;
 use crate::intersectable::*;
-use crate::material::Material;
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Material;
+use crate::Vec3;
 
 #[derive(Debug)]
 pub struct Sphere {

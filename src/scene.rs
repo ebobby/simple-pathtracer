@@ -1,5 +1,5 @@
-use super::bvh::BVH;
-use super::camera::Camera;
+use super::Camera;
+use super::BVH;
 
 #[derive(Debug)]
 pub struct Scene {

@@ -1,4 +1,4 @@
-use super::vector::Vec3;
+use super::Vec3;
 
 #[derive(Clone, Debug)]
 pub struct Ray {

@@ -1,7 +1,7 @@
 use super::{Scatterable, Scattered};
-use crate::color::Color;
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
+use crate::Color;
 
 #[derive(Clone, Debug)]
 pub struct DiffuseLight {

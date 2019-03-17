@@ -1,7 +1,7 @@
 //! Axis-aligned minimum bounding box.
 
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Vec3;
 
 #[derive(Clone, Copy, Debug)]
 pub struct AABB {

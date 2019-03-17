@@ -1,7 +1,7 @@
 use crate::aabb::AABB;
-use crate::material::Material;
 use crate::ray::Ray;
-use crate::vector::Vec3;
+use crate::Material;
+use crate::Vec3;
 
 use std::fmt::Debug;
 use std::marker::{Send, Sync};
