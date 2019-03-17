@@ -15,8 +15,7 @@ impl TextureObject for Checker {
         let y = (v * self.squares as f64) as u32;
 
         match (is_even(x), is_even(y)) {
-            (true, true) => self.even,
-            (false, false) => self.even,
+            (true, true) | (false, false) => self.even,
             _ => self.odd,
         }
     }

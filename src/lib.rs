@@ -157,7 +157,9 @@ pub fn render(
 
 fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
     if let Some(intersection) = scene.world.intersect(ray, 0.0001, std::f64::INFINITY) {
-        let emitted = intersection.material.emit(intersection.u, intersection.v, intersection.p);
+        let emitted = intersection
+            .material
+            .emit(intersection.u, intersection.v, intersection.p);
 
         if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
             let mut attenuation = scattered.attenuation;
