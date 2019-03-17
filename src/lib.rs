@@ -114,7 +114,7 @@ pub fn render(
 
                             let ray = scene.camera.get_ray(u, v);
 
-                            pixel_color += radiance(scene.as_ref(), ray, 1, max_depth);
+                            pixel_color += radiance(scene.as_ref(), &ray, 1, max_depth);
                         }
                     }
                 }
@@ -155,7 +155,7 @@ pub fn render(
     );
 }
 
-fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
+fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
     if let Some(intersection) = scene.world.intersect(ray, 0.0001, std::f64::INFINITY) {
         let emitted = intersection.material.emit();
 
@@ -172,7 +172,7 @@ fn radiance(scene: &Scene, ray: Ray, depth: u32, max_depth: u32) -> Color {
             }
 
             if depth < 100 {
-                emitted + attenuation * radiance(scene, scattered.scattered, depth + 1, max_depth)
+                emitted + attenuation * radiance(scene, &scattered.scattered, depth + 1, max_depth)
             } else {
                 emitted
             }

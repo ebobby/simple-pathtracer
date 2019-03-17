@@ -21,7 +21,7 @@ use metal::Metal;
 /// and 1.0 and they're clamped when converted to `Rgb` it doens't mean they
 /// can't be declared to have larger values if needed to. This is usually the
 /// case for light intensity.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Material {
     Lambertian(Lambertian),
     Dielectric(Dielectric),
@@ -37,7 +37,7 @@ pub struct Scattered {
 
 pub trait Scatterable {
     fn emit(&self) -> Color;
-    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered>;
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered>;
 }
 
 impl Material {
@@ -61,13 +61,13 @@ impl Material {
     }
 
     pub fn emit(&self) -> Color {
-        match *self {
+        match self {
             Material::DiffuseLight(light) => light.emit(),
             _ => Color::new(0.0, 0.0, 0.0),
         }
     }
 
-    pub fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    pub fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         match self {
             Material::Lambertian(lambertian) => lambertian.scatter(ray, intersection),
             Material::Metal(metal) => metal.scatter(ray, intersection),

@@ -22,7 +22,7 @@ impl Intersectable for Disc {
         }
     }
 
-    fn intersect(&self, ray: Ray, min: f64, max: f64) -> Option<Intersection> {
+    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection> {
         let denom = self.normal.dot(ray.direction);
 
         if denom.abs() > std::f64::EPSILON {

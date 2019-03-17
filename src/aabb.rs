@@ -25,7 +25,7 @@ impl AABB {
         AABB { min, max }
     }
 
-    pub fn intersect(&self, ray: Ray, tmin: f64, tmax: f64) -> bool {
+    pub fn intersect(&self, ray: &Ray, tmin: f64, tmax: f64) -> bool {
         // Check X axis
         let mut inv_d = ray.direction.x.recip();
         let mut t0 = (self.min.x - ray.origin.x) * inv_d;

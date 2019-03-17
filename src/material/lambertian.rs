@@ -4,7 +4,7 @@ use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Lambertian {
     pub albedo: Texture,
 }
@@ -14,7 +14,7 @@ impl Scatterable for Lambertian {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, _ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(&self, _ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         let target = intersection.p + intersection.normal + super::random_in_unit_sphere();
 
         let scattered = Ray {

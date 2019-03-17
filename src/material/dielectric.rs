@@ -5,7 +5,7 @@ use crate::Color;
 use crate::Texture;
 use crate::Vec3;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Dielectric {
     pub attenuation: Texture,
     pub refractive_index: f64,
@@ -22,7 +22,7 @@ impl Scatterable for Dielectric {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         let ref_idx = self.refractive_index;
         let attenuation = self
             .attenuation

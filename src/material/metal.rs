@@ -4,7 +4,7 @@ use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Metal {
     pub albedo: Texture,
     pub fuzz: f64,
@@ -15,7 +15,7 @@ impl Scatterable for Metal {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, ray: Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
         let reflected = super::reflect(ray.direction.normalize(), intersection.normal);
 
         let scattered = Ray {
