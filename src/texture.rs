@@ -8,7 +8,7 @@ use checker::Checker;
 use constant_color::ConstantColor;
 
 /// Texture object.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Texture {
     ConstantColor(ConstantColor),
     Checker(Checker),
@@ -28,7 +28,7 @@ impl Texture {
     }
 
     pub fn value(&self, u: f64, v: f64, p: Vec3) -> Color {
-        match *self {
+        match self {
             Texture::ConstantColor(color) => color.value(u, v, p),
             Texture::Checker(checker) => checker.value(u, v, p),
         }

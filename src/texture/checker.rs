@@ -2,7 +2,7 @@ use super::TextureObject;
 use crate::Color;
 use crate::Vec3;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct Checker {
     pub squares: usize,
     pub even: Color,
