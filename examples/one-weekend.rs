@@ -85,7 +85,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
     list.push(Box::new(Sphere {
         center: Vec3::new(0.0, 0.0, 0.0),
         radius: 5000.0,
-        material: Material::diffuse_light(Color::new(0.5, 0.7, 1.0)),
+        material: Material::diffuse_light(Texture::constant_color(Color::new(0.5, 0.7, 1.0))),
     }));
 
     let look_from = Vec3::new(13.0, 2.0, 3.0);

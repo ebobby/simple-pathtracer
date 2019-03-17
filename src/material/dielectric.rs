@@ -18,7 +18,7 @@ fn schlick(cosine: f64, ref_idx: f64) -> f64 {
 }
 
 impl Scatterable for Dielectric {
-    fn emit(&self) -> Color {
+    fn emit(&self, _u: f64, _v: f64, _p: Vec3) -> Color {
         Color::new(0.0, 0.0, 0.0)
     }
 

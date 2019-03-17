@@ -36,7 +36,7 @@ pub struct Scattered {
 }
 
 pub trait Scatterable {
-    fn emit(&self) -> Color;
+    fn emit(&self, u: f64, v: f64, p: Vec3) -> Color;
     fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered>;
 }
 
@@ -56,13 +56,13 @@ impl Material {
         })
     }
 
-    pub fn diffuse_light(color: Color) -> Material {
-        Material::DiffuseLight(DiffuseLight { color })
+    pub fn diffuse_light(texture: Texture) -> Material {
+        Material::DiffuseLight(DiffuseLight { texture })
     }
 
-    pub fn emit(&self) -> Color {
+    pub fn emit(&self, u: f64, v: f64, p: Vec3) -> Color {
         match self {
-            Material::DiffuseLight(light) => light.emit(),
+            Material::DiffuseLight(light) => light.emit(u, v, p),
             _ => Color::new(0.0, 0.0, 0.0),
         }
     }

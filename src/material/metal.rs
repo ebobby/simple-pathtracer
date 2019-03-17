@@ -3,6 +3,7 @@ use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
+use crate::Vec3;
 
 #[derive(Clone, Debug)]
 pub struct Metal {
@@ -11,7 +12,7 @@ pub struct Metal {
 }
 
 impl Scatterable for Metal {
-    fn emit(&self) -> Color {
+    fn emit(&self, _u: f64, _v: f64, _p: Vec3) -> Color {
         Color::new(0.0, 0.0, 0.0)
     }
 

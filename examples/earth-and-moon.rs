@@ -14,7 +14,9 @@ fn earth_moon(aspect_ratio: f64) -> Scene {
             center: Vec3::new(1000.0, 0.0, 0.0),
             normal: Vec3::new(-1.0, 0.0, 0.0),
             radius: 1000.0,
-            material: Material::diffuse_light(Color::new(1.0, 0.90, 0.75) * 5.0),
+            material: Material::diffuse_light(Texture::constant_color(
+                Color::new(1.0, 0.90, 0.75) * 5.0,
+            )),
         }),
         Box::new(Sphere {
             center: Vec3::new(-9.0, 0.0, 0.0),
