@@ -84,10 +84,10 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
 fn main() {
     let width = 640;
     let height = 480;
-    let samples = 25;
+    let samples = 2500;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
-    let max_depth = 50;
+    let max_depth = 100;
     let workers: usize = 12;
 
     let scene = cornell_box(aspect_ratio);

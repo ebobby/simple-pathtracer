@@ -100,7 +100,7 @@ fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
 fn main() {
     let width = 640;
     let height = 480;
-    let samples = 500;
+    let samples = 1000;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 10;
