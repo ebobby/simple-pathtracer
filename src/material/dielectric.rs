@@ -4,6 +4,7 @@ use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
 use crate::Vec3;
+use crate::rng;
 
 #[derive(Clone, Debug)]
 pub struct Dielectric {
@@ -52,7 +53,7 @@ impl Scatterable for Dielectric {
                 (Vec3::zero(), 1.0)
             };
 
-        let scattered = if rand::random::<f64>() < reflect_probability {
+        let scattered = if rng::get_random_number() < reflect_probability {
             Ray {
                 origin: intersection.p,
                 direction: reflected,

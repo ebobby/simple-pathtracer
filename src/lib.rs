@@ -7,6 +7,7 @@ mod color;
 mod intersectable;
 mod material;
 mod ray;
+mod rng;
 mod scene;
 mod texture;
 mod vector;
@@ -166,7 +167,7 @@ fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
             let p = (attenuation.r + attenuation.g + attenuation.b) / 3.0;
 
             if depth > 5 {
-                if rand::random::<f64>() < p {
+                if rng::get_random_number() < p {
                     attenuation = attenuation / p;
                 } else {
                     return emitted;
@@ -187,7 +188,7 @@ fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
 }
 
 fn tent_filter_factor() -> f64 {
-    let r = 2.0 * rand::random::<f64>();
+    let r = 2.0 * rng::get_random_number();
 
     if r < 1.0 {
         r.sqrt() - 1.0

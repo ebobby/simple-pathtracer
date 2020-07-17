@@ -3,6 +3,7 @@ use crate::ray::Ray;
 use crate::Color;
 use crate::Texture;
 use crate::Vec3;
+use crate::rng;
 
 mod dielectric;
 mod diffuse_light;
@@ -78,11 +79,11 @@ impl Material {
 }
 
 fn random_in_unit_sphere() -> Vec3 {
-    let u = rand::random::<f64>();
-    let v = rand::random::<f64>();
+    let u = rng::get_random_number();
+    let v = rng::get_random_number();
     let theta = u * 2.0 * std::f64::consts::PI;
     let phi = (2.0 * v - 1.0).acos();
-    let r = rand::random::<f64>().cbrt();
+    let r = rng::get_random_number().cbrt();
     let sin_theta = theta.sin();
     let cos_theta = theta.cos();
     let sin_phi = phi.sin();
