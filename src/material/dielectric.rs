@@ -1,10 +1,10 @@
 use super::{Scatterable, Scattered};
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
+use crate::rng;
 use crate::Color;
 use crate::Texture;
 use crate::Vec3;
-use crate::rng;
 
 #[derive(Clone, Debug)]
 pub struct Dielectric {

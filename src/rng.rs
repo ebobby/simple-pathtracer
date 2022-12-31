@@ -12,13 +12,13 @@ pub fn get_random_number() -> f64 {
 }
 
 pub struct RandomNumber {
-    rng: Xoshiro256PlusPlus
+    rng: Xoshiro256PlusPlus,
 }
 
 impl RandomNumber {
     pub fn create() -> Self {
         RandomNumber {
-            rng: Xoshiro256PlusPlus::from_rng(thread_rng()).unwrap()
+            rng: Xoshiro256PlusPlus::from_rng(thread_rng()).unwrap(),
         }
     }
 

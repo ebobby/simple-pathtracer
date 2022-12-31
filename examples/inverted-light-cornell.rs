@@ -12,7 +12,7 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
     let red = Color::new(0.75, 0.25, 0.25);
     let white = Color::new(0.75, 0.75, 0.75);
     let blue = Color::new(0.25, 0.25, 0.75);
-//    let light = Color::new(1.0, 1.0, 1.0) * 23.0;
+    //let light = Color::new(1.0, 1.0, 1.0) * 23.0;
     let light = Color::new(0.9373, 0.9216, 0.8471) * 23.0;
 
     let objects: Vec<Hitable> = vec![
@@ -27,31 +27,31 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
         Box::new(Sphere {
             center: Vec3::new(5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(Texture::constant_color(blue))
+            material: Material::lambertian(Texture::constant_color(blue)),
         }),
         // left wall
         Box::new(Sphere {
             center: Vec3::new(-5006.0, 0.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(Texture::constant_color(red))
+            material: Material::lambertian(Texture::constant_color(red)),
         }),
         // ceiling
         Box::new(Sphere {
             center: Vec3::new(0.0, 5010.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(Texture::constant_color(white))
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // floor
         Box::new(Sphere {
             center: Vec3::new(0.0, -5000.0, 0.0),
             radius: 5000.0,
-            material: Material::lambertian(Texture::constant_color(white))
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         // back wall
         Box::new(Sphere {
             center: Vec3::new(0.0, 0.0, -5010.0),
             radius: 5000.0,
-            material: Material::lambertian(Texture::constant_color(white))
+            material: Material::lambertian(Texture::constant_color(white)),
         }),
         Box::new(Sphere {
             center: Vec3::new(-3.5, 2.0, -3.0),
@@ -59,12 +59,12 @@ fn cornell_box(aspect_ratio: f64) -> Scene {
             material: Material::dielectric(
                 Texture::constant_color(Color::new(1.0, 1.0, 1.0)),
                 1.52,
-            )
+            ),
         }),
         Box::new(Sphere {
             center: Vec3::new(3.5, 2.0, -7.0),
             radius: 2.0,
-            material: Material::metal(Texture::constant_color(Color::new(0.95, 0.82, 0.42)), 0.25)
+            material: Material::metal(Texture::constant_color(Color::new(0.95, 0.82, 0.42)), 0.25),
         }),
         Box::new(Sphere {
             center: Vec3::new(3.8, 2.0, -1.5),
