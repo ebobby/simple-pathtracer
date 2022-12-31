@@ -20,7 +20,7 @@ impl TextureObject for Bitmap {
         j = j.min(height - 1);
 
         let pixel: image::Rgba<u8> = self.bitmap.get_pixel(i, j);
-        let data = pixel.data;
+        let data = pixel.0;
 
         Color::from_u8(data[0], data[1], data[2])
     }
