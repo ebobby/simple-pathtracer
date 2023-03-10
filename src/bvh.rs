@@ -21,7 +21,7 @@ impl BVH {
         }
 
         let mut rng = rand::thread_rng();
-        let axis: usize = rng.gen_range(0, 3);
+        let axis: usize = rng.gen_range(0..3);
 
         objects.sort_by(|a, b| {
             let a_box = a.bounding_box();

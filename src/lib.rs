@@ -73,7 +73,7 @@ pub fn render(
 
     pb.set_style(ProgressStyle::default_bar().template(
         "{spinner:.green} [{elapsed_precise}] [{bar:40.red/gray}] {percent}/100% ({eta_precise})",
-    ));
+    ).unwrap());
 
     let gamma_correction = gamma.recip();
 
