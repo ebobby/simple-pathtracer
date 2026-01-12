@@ -69,4 +69,24 @@ impl Camera {
             direction,
         }
     }
+
+    /// Returns the camera position.
+    pub fn look_from(&self) -> Vec3 {
+        self.look_from
+    }
+
+    /// Returns the screen corner position.
+    pub fn corner(&self) -> Vec3 {
+        self.corner
+    }
+
+    /// Returns the horizontal screen vector.
+    pub fn horizontal(&self) -> Vec3 {
+        self.horizontal
+    }
+
+    /// Returns the vertical screen vector.
+    pub fn vertical(&self) -> Vec3 {
+        self.vertical
+    }
 }

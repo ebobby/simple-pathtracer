@@ -10,7 +10,7 @@ use std::marker::{Send, Sync};
 pub type Hitable = Box<dyn Intersectable + Send + Sync>;
 
 pub trait Intersectable: Debug + Send + Sync {
-    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection>;
+    fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection<'_>>;
     fn bounding_box(&self) -> AABB;
 }
 

@@ -8,10 +8,12 @@ pub struct Vec3 {
 }
 
 impl Vec3 {
+    #[inline(always)]
     pub fn new(x: f64, y: f64, z: f64) -> Self {
         Self { x, y, z }
     }
 
+    #[inline(always)]
     pub fn zero() -> Self {
         Self {
             x: 0.0,
@@ -20,18 +22,22 @@ impl Vec3 {
         }
     }
 
+    #[inline(always)]
     pub fn norm(&self) -> f64 {
         self.x * self.x + self.y * self.y + self.z * self.z
     }
 
+    #[inline(always)]
     pub fn length(&self) -> f64 {
         self.norm().sqrt()
     }
 
+    #[inline(always)]
     pub fn dot(&self, other: Vec3) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
     }
 
+    #[inline(always)]
     pub fn cross(&self, other: Vec3) -> Vec3 {
         Vec3 {
             x: self.y * other.z - self.z * other.y,
@@ -40,6 +46,7 @@ impl Vec3 {
         }
     }
 
+    #[inline(always)]
     pub fn normalize(&self) -> Vec3 {
         *self / self.length()
     }
@@ -48,6 +55,7 @@ impl Vec3 {
 impl Add for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn add(self, rhs: Vec3) -> Vec3 {
         Vec3 {
             x: self.x + rhs.x,
@@ -60,6 +68,7 @@ impl Add for Vec3 {
 impl Sub for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn sub(self, rhs: Vec3) -> Vec3 {
         Vec3 {
             x: self.x - rhs.x,
@@ -72,6 +81,7 @@ impl Sub for Vec3 {
 impl Mul<f64> for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn mul(self, factor: f64) -> Vec3 {
         Vec3 {
             x: self.x * factor,
@@ -84,6 +94,7 @@ impl Mul<f64> for Vec3 {
 impl Mul<Vec3> for f64 {
     type Output = Vec3;
 
+    #[inline(always)]
     fn mul(self, factor: Vec3) -> Vec3 {
         Vec3 {
             x: self * factor.x,
@@ -96,6 +107,7 @@ impl Mul<Vec3> for f64 {
 impl Mul for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn mul(self, rhs: Vec3) -> Vec3 {
         Vec3 {
             x: self.x * rhs.x,
@@ -108,6 +120,7 @@ impl Mul for Vec3 {
 impl Neg for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn neg(self) -> Vec3 {
         Vec3 {
             x: -self.x,
@@ -120,6 +133,7 @@ impl Neg for Vec3 {
 impl Div<f64> for Vec3 {
     type Output = Self;
 
+    #[inline(always)]
     fn div(self, rhs: f64) -> Vec3 {
         Vec3 {
             x: self.x / rhs,

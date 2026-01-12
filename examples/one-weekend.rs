@@ -1,6 +1,14 @@
+//! Ray Tracing in One Weekend - Classic random spheres scene
+//!
+//! The iconic scene from Peter Shirley's "Ray Tracing in One Weekend" book.
+//! Features hundreds of randomly placed spheres with various materials.
+//!
+//! Run with --gpu flag for GPU rendering.
+
 use pathtracer::shape::*;
 use pathtracer::Camera;
 use pathtracer::Color;
+use pathtracer::GPUShape;
 use pathtracer::Hitable;
 use pathtracer::Material;
 use pathtracer::Scene;
@@ -8,114 +16,170 @@ use pathtracer::Texture;
 use pathtracer::Vec3;
 use pathtracer::BVH;
 
-fn raytracing_one_weekend(aspect_ratio: f64) -> Scene {
-    let mut list: Vec<Hitable> = Vec::new();
+use rand::SeedableRng;
+use rand::Rng;
+
+fn build_shapes() -> (Vec<Sphere>, Vec<Disc>) {
+    // Use seeded RNG for reproducible scene generation
+    let mut rng = rand::rngs::StdRng::seed_from_u64(42);
+
+    let mut spheres: Vec<Sphere> = Vec::new();
     let radius = 0.2f64;
 
-    list.push(Box::new(Sphere {
+    // Ground
+    spheres.push(Sphere {
         center: Vec3::new(0.0, -1000.0, 0.0),
         radius: 1000.0,
         material: Material::lambertian(Texture::constant_color(Color::new(0.5, 0.5, 0.5))),
-    }));
+    });
 
+    // Random small spheres
     for a in -11..11 {
         for b in -11..11 {
-            let choose_mat = rand::random::<f64>();
+            let choose_mat: f64 = rng.gen();
 
             let center = Vec3::new(
-                f64::from(a) + 0.9 * rand::random::<f64>(),
+                f64::from(a) + 0.9 * rng.gen::<f64>(),
                 0.2,
-                f64::from(b) + 0.9 * rand::random::<f64>(),
+                f64::from(b) + 0.9 * rng.gen::<f64>(),
             );
 
             if (center - Vec3::new(4.0, 0.2, 0.0)).length() > 0.9 {
                 if choose_mat < 0.8 {
-                    list.push(Box::new(Sphere {
+                    // Diffuse
+                    spheres.push(Sphere {
                         center,
                         radius,
                         material: Material::lambertian(Texture::constant_color(Color::new(
-                            rand::random::<f64>() * rand::random::<f64>(),
-                            rand::random::<f64>() * rand::random::<f64>(),
-                            rand::random::<f64>() * rand::random::<f64>(),
+                            rng.gen::<f64>() * rng.gen::<f64>(),
+                            rng.gen::<f64>() * rng.gen::<f64>(),
+                            rng.gen::<f64>() * rng.gen::<f64>(),
                         ))),
-                    }));
+                    });
                 } else if choose_mat < 0.95 {
-                    list.push(Box::new(Sphere {
+                    // Metal
+                    spheres.push(Sphere {
                         center,
                         radius,
                         material: Material::metal(
                             Texture::constant_color(Color::new(
-                                0.5 * (1.0 + rand::random::<f64>()),
-                                0.5 * (1.0 + rand::random::<f64>()),
-                                0.5 * (1.0 + rand::random::<f64>()),
+                                0.5 * (1.0 + rng.gen::<f64>()),
+                                0.5 * (1.0 + rng.gen::<f64>()),
+                                0.5 * (1.0 + rng.gen::<f64>()),
                             )),
-                            0.5 * rand::random::<f64>(),
+                            0.5 * rng.gen::<f64>(),
                         ),
-                    }));
+                    });
                 } else {
-                    list.push(Box::new(Sphere {
+                    // Glass
+                    spheres.push(Sphere {
                         center,
                         radius,
                         material: Material::dielectric(
                             Texture::constant_color(Color::new(1.0, 1.0, 1.0)),
                             1.5,
                         ),
-                    }));
+                    });
                 }
             }
         }
     }
 
-    list.push(Box::new(Sphere {
+    // Three hero spheres
+    spheres.push(Sphere {
         center: Vec3::new(0.0, 1.0, 0.0),
         radius: 1.0,
         material: Material::dielectric(Texture::constant_color(Color::new(1.0, 1.0, 1.0)), 1.5),
-    }));
-    list.push(Box::new(Sphere {
+    });
+    spheres.push(Sphere {
         center: Vec3::new(-4.0, 1.0, 0.0),
         radius: 1.0,
         material: Material::lambertian(Texture::constant_color(Color::new(0.4, 0.2, 0.1))),
-    }));
-    list.push(Box::new(Sphere {
+    });
+    spheres.push(Sphere {
         center: Vec3::new(4.0, 1.0, 0.0),
         radius: 1.0,
         material: Material::metal(Texture::constant_color(Color::new(0.7, 0.6, 0.5)), 0.0),
-    }));
+    });
 
-    list.push(Box::new(Sphere {
+    // Sky light (large emissive sphere surrounding the scene)
+    spheres.push(Sphere {
         center: Vec3::new(0.0, 0.0, 0.0),
         radius: 5000.0,
         material: Material::diffuse_light(Texture::constant_color(Color::new(0.5, 0.7, 1.0))),
-    }));
+    });
 
+    let discs = vec![]; // No discs in this scene
+
+    (spheres, discs)
+}
+
+fn build_camera(aspect_ratio: f64) -> Camera {
     let look_from = Vec3::new(13.0, 2.0, 3.0);
     let look_at = Vec3::new(0.0, 0.0, 0.0);
+    Camera::new(look_from, look_at, 20.0, aspect_ratio, 0.0)
+}
 
+fn build_scene_cpu(spheres: Vec<Sphere>, discs: Vec<Disc>, camera: Camera) -> Scene {
+    let mut objects: Vec<Hitable> = Vec::new();
+    for sphere in spheres {
+        objects.push(Box::new(sphere));
+    }
+    for disc in discs {
+        objects.push(Box::new(disc));
+    }
     Scene {
-        camera: Camera::new(look_from, look_at, 20.0, aspect_ratio, 0.0),
-        world: BVH::from_vec(list),
+        camera,
+        world: BVH::from_vec(objects),
     }
 }
 
 fn main() {
-    let width = 640;
-    let height = 480;
+    let args: Vec<String> = std::env::args().collect();
+    let use_gpu = args.iter().any(|arg| arg == "--gpu");
+
+    let width = 1200;
+    let height = 800;
     let samples = 1000;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
-    let max_depth = 10;
+    let max_depth = 50;
     let workers: usize = 12;
 
-    let scene = raytracing_one_weekend(aspect_ratio);
+    let (spheres, discs) = build_shapes();
+    let camera = build_camera(aspect_ratio);
 
-    pathtracer::render(
-        scene,
-        width,
-        height,
-        samples,
-        max_depth,
-        gamma,
-        workers,
-        "output/one-weekend.png",
-    );
+    if use_gpu {
+        let mut gpu_shapes: Vec<GPUShape> = Vec::new();
+        for sphere in spheres {
+            gpu_shapes.push(GPUShape::Sphere(sphere));
+        }
+        for disc in discs {
+            gpu_shapes.push(GPUShape::Disc(disc));
+        }
+
+        pathtracer::render_gpu(
+            gpu_shapes,
+            &camera,
+            width,
+            height,
+            samples,
+            max_depth,
+            gamma,
+            "output/one-weekend-gpu.png",
+        );
+    } else {
+        let scene = build_scene_cpu(spheres, discs, camera);
+
+        pathtracer::render(
+            scene,
+            width,
+            height,
+            samples,
+            max_depth,
+            gamma,
+            workers,
+            "output/one-weekend.png",
+        );
+    }
 }

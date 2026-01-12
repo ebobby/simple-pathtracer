@@ -5,9 +5,9 @@ mod bitmap;
 mod checker;
 mod constant_color;
 
-use bitmap::Bitmap;
-use checker::Checker;
-use constant_color::ConstantColor;
+pub use bitmap::Bitmap;
+pub use checker::Checker;
+pub use constant_color::ConstantColor;
 
 /// Texture object.
 #[derive(Clone, Debug)]

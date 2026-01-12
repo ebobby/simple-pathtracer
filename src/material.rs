@@ -10,10 +10,10 @@ mod diffuse_light;
 mod lambertian;
 mod metal;
 
-use dielectric::Dielectric;
-use diffuse_light::DiffuseLight;
-use lambertian::Lambertian;
-use metal::Metal;
+pub use dielectric::Dielectric;
+pub use diffuse_light::DiffuseLight;
+pub use lambertian::Lambertian;
+pub use metal::Metal;
 
 /// Material object.
 ///
@@ -78,18 +78,19 @@ impl Material {
     }
 }
 
+/// Generate a random point inside a unit sphere using rejection sampling.
+/// This is faster than the spherical coordinate approach as it avoids
+/// expensive acos() and cbrt() calls.
+#[inline]
 fn random_in_unit_sphere() -> Vec3 {
-    let u = rng::get_random_number();
-    let v = rng::get_random_number();
-    let theta = u * 2.0 * std::f64::consts::PI;
-    let phi = (2.0 * v - 1.0).acos();
-    let r = rng::get_random_number().cbrt();
-    let sin_theta = theta.sin();
-    let cos_theta = theta.cos();
-    let sin_phi = phi.sin();
-    let cos_phi = phi.cos();
-
-    Vec3::new(r * sin_phi * cos_theta, r * sin_phi * sin_theta, cos_phi)
+    loop {
+        let x = 2.0 * rng::get_random_number() - 1.0;
+        let y = 2.0 * rng::get_random_number() - 1.0;
+        let z = 2.0 * rng::get_random_number() - 1.0;
+        if x * x + y * y + z * z <= 1.0 {
+            return Vec3::new(x, y, z);
+        }
+    }
 }
 
 fn reflect(v: Vec3, n: Vec3) -> Vec3 {
