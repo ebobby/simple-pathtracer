@@ -252,6 +252,13 @@ impl From<&Camera> for GPUCamera {
     }
 }
 
+impl GPUCamera {
+    /// Create a GPUCamera from a Camera reference.
+    pub fn from_camera(camera: &Camera) -> Self {
+        Self::from(camera)
+    }
+}
+
 /// Render parameters passed to GPU shader.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

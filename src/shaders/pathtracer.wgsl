@@ -464,7 +464,12 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
         let hit = intersect_bvh(ray);
 
         if !hit.valid {
-            // Miss - return background (black for now)
+            // Miss - add sky/ambient light contribution
+            // Simple gradient sky (blue-ish at top, white at horizon)
+            let unit_dir = normalize(ray.direction);
+            let t = 0.5 * (unit_dir.y + 1.0);
+            let sky = (1.0 - t) * vec3<f32>(1.0, 1.0, 1.0) + t * vec3<f32>(0.5, 0.7, 1.0);
+            color = color + throughput * sky * 0.3; // Dim ambient
             break;
         }
 
@@ -475,6 +480,10 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
             color = color + throughput * material.color.xyz;
             break;
         }
+
+        // Add small ambient contribution to make scene visible in closed rooms
+        // (Real path tracing would use importance sampling / next event estimation)
+        color = color + throughput * material.color.xyz * 0.05;
 
         // Scatter ray
         let scattered = scatter(ray, hit, material);

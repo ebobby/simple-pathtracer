@@ -3,6 +3,8 @@
 mod context;
 mod scene;
 mod render;
+mod realtime;
 
 pub use render::render_gpu;
+pub use realtime::render_realtime;
 pub use scene::{GPUScene, GPUShape};

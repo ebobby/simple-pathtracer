@@ -1,0 +1,126 @@
+//! Real-time Interactive Renderer
+//!
+//! Interactive path tracing with camera controls and progressive refinement.
+//!
+//! Controls:
+//! - WASD: Move camera
+//! - Mouse (left click + drag): Look around
+//! - Space/Shift: Move up/down
+//! - Escape: Exit
+
+use pathtracer::shape::*;
+use pathtracer::Camera;
+use pathtracer::Color;
+use pathtracer::GPUShape;
+use pathtracer::Material;
+use pathtracer::Texture;
+use pathtracer::Vec3;
+
+fn build_shapes() -> Vec<GPUShape> {
+    // Inverted Cornell box scene (camera looking down from above)
+
+    let red = Color::new(0.75, 0.25, 0.25);
+    let white = Color::new(0.75, 0.75, 0.75);
+    let blue = Color::new(0.25, 0.25, 0.75);
+    let light = Color::new(0.9373, 0.9216, 0.8471) * 23.0;
+
+    let mut shapes: Vec<GPUShape> = Vec::new();
+
+    // right wall (blue)
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(5006.0, 0.0, 0.0),
+        radius: 5000.0,
+        material: Material::lambertian(Texture::constant_color(blue)),
+    }));
+
+    // left wall (red)
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(-5006.0, 0.0, 0.0),
+        radius: 5000.0,
+        material: Material::lambertian(Texture::constant_color(red)),
+    }));
+
+    // ceiling
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(0.0, 5010.0, 0.0),
+        radius: 5000.0,
+        material: Material::lambertian(Texture::constant_color(white)),
+    }));
+
+    // floor
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(0.0, -5000.0, 0.0),
+        radius: 5000.0,
+        material: Material::lambertian(Texture::constant_color(white)),
+    }));
+
+    // back wall
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(0.0, 0.0, -5010.0),
+        radius: 5000.0,
+        material: Material::lambertian(Texture::constant_color(white)),
+    }));
+
+    // glass sphere
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(-3.5, 2.0, -3.0),
+        radius: 2.0,
+        material: Material::dielectric(Texture::constant_color(Color::new(1.0, 1.0, 1.0)), 1.52),
+    }));
+
+    // gold metal sphere
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(3.5, 2.0, -7.0),
+        radius: 2.0,
+        material: Material::metal(Texture::constant_color(Color::new(0.95, 0.82, 0.42)), 0.25),
+    }));
+
+    // red metal sphere
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(3.8, 2.0, -1.5),
+        radius: 2.0,
+        material: Material::metal(Texture::constant_color(Color::new(1.0, 0.05, 0.05)), 0.0),
+    }));
+
+    // green metal sphere
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(0.0, 1.2, -7.8),
+        radius: 1.2,
+        material: Material::metal(Texture::constant_color(Color::new(0.05, 1.0, 0.05)), 0.25),
+    }));
+
+    // purple metal sphere
+    shapes.push(GPUShape::Sphere(Sphere {
+        center: Vec3::new(0.0, 7.5, -5.0),
+        radius: 1.8,
+        material: Material::metal(Texture::constant_color(Color::new(0.52, 0.05, 0.52)), 0.0),
+    }));
+
+    // floor light
+    shapes.push(GPUShape::Disc(Disc {
+        center: Vec3::new(0.0, 0.0, -5.0),
+        radius: 1.5,
+        normal: Vec3::new(0.0, 1.0, 0.0),
+        material: Material::diffuse_light(Texture::constant_color(light)),
+    }));
+
+    shapes
+}
+
+fn build_camera(aspect_ratio: f64) -> Camera {
+    let look_from = Vec3::new(0.0, 9.95, 8.0);
+    let look_at = Vec3::new(0.0, 3.0, -5.0);
+    Camera::new(look_from, look_at, 55.0, aspect_ratio, 0.0)
+}
+
+fn main() {
+    let width = 640;
+    let height = 480;
+    let gamma = 2.2f64;
+    let aspect_ratio = f64::from(width) / f64::from(height);
+
+    let shapes = build_shapes();
+    let camera = build_camera(aspect_ratio);
+
+    pathtracer::render_realtime(shapes, &camera, width, height, gamma);
+}

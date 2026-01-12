@@ -21,6 +21,7 @@ pub use bvh::BVH;
 pub use camera::Camera;
 pub use color::Color;
 pub use gpu::render_gpu;
+pub use gpu::render_realtime;
 pub use gpu::GPUScene;
 pub use gpu::GPUShape;
 pub use gpu_types::*;

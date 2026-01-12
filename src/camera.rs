@@ -4,7 +4,7 @@ use super::ray::Ray;
 use super::Vec3;
 
 /// The objct that defines where to look from and where to inside the scene.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Camera {
     look_from: Vec3,
     corner: Vec3,
@@ -88,5 +88,12 @@ impl Camera {
     /// Returns the vertical screen vector.
     pub fn vertical(&self) -> Vec3 {
         self.vertical
+    }
+
+    /// Returns the vertical field of view in degrees.
+    pub fn vfov(&self) -> f64 {
+        // vertical.length() = 2 * half_height, and half_height = tan(fov/2)
+        let half_height = self.vertical.length() / 2.0;
+        2.0 * half_height.atan().to_degrees()
     }
 }
