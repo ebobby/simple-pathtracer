@@ -50,6 +50,17 @@ impl Vec3 {
     pub fn normalize(&self) -> Vec3 {
         *self / self.length()
     }
+
+    /// Tangent and bitangent perpendicular to this unit vector (Duff et al. 2017).
+    /// Matches `build_onb` in the GPU shader.
+    pub fn orthonormal_basis(&self) -> (Vec3, Vec3) {
+        let sign = if self.z >= 0.0 { 1.0 } else { -1.0 };
+        let a = -1.0 / (sign + self.z);
+        let b = self.x * self.y * a;
+        let tangent = Vec3::new(1.0 + sign * self.x * self.x * a, sign * b, -sign * self.x);
+        let bitangent = Vec3::new(b, sign + self.y * self.y * a, -self.y);
+        (tangent, bitangent)
+    }
 }
 
 impl Add for Vec3 {

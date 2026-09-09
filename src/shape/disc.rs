@@ -34,11 +34,14 @@ impl Intersectable for Disc {
             let d = p - self.center;
 
             if d.norm() < self.radius * self.radius && distance < max && distance > min {
+                let (tangent, bitangent) = self.normal.orthonormal_basis();
+                let diameter = 2.0 * self.radius;
+
                 Some(Intersection {
                     t: distance,
-                    p: ray.point_at(distance),
-                    u: 0.0,
-                    v: 0.0,
+                    p,
+                    u: 0.5 + d.dot(tangent) / diameter,
+                    v: 0.5 + d.dot(bitangent) / diameter,
                     normal: self.normal,
                     material: &self.material,
                 })
