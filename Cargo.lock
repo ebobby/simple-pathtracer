@@ -1392,7 +1392,6 @@ dependencies = [
  "pollster",
  "rand",
  "rand_xoshiro",
- "threadpool",
  "wgpu",
  "winit",
 ]

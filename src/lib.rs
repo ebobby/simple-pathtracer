@@ -20,7 +20,7 @@ pub use aabb::AABB;
 pub use bvh::BVH;
 pub use camera::Camera;
 pub use color::Color;
-pub use gpu::render_gpu;
+pub use gpu::{render_gpu, render_gpu_linear};
 pub use gpu::render_realtime;
 pub use gpu::GPUScene;
 pub use gpu::GPUShape;
@@ -34,12 +34,11 @@ use intersectable::*;
 use ray::Ray;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use indicatif::{ProgressBar, ProgressStyle};
-use threadpool::ThreadPool;
 
 /// Hitable is a boxed trait object that implements `Intersectable`.
 pub type Hitable = Box<dyn Intersectable + Send + Sync>;
@@ -75,10 +74,41 @@ pub fn render(
     workers: usize,
     filename: &str,
 ) {
-    // Shared mutable image buffer
-    let imgbuf = Arc::new(Mutex::new(image::ImageBuffer::new(width, height)));
-    // Shared scene buffer
-    let scene = Arc::new(scene);
+    let start = Instant::now();
+
+    let pixels = render_linear(&scene, width, height, samples, max_depth, workers);
+
+    let gamma_correction = gamma.recip();
+    let mut imgbuf = image::ImageBuffer::new(width, height);
+    for (i, color) in pixels.iter().enumerate() {
+        let x = i as u32 % width;
+        let y = i as u32 / width;
+        imgbuf.put_pixel(x, y, color.to_gamma_rgb(gamma_correction));
+    }
+    imgbuf.save(filename).unwrap();
+
+    let end = start.elapsed();
+
+    println!();
+    println!(
+        "Render took {} seconds.",
+        f64::from(end.as_secs() as u32) + f64::from(end.subsec_millis()) / 1000.0
+    );
+}
+
+/// Render the scene and return linear (not gamma corrected) radiance per pixel,
+/// in row-major order. See [`render`] for the meaning of the arguments.
+pub fn render_linear(
+    scene: &Scene,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+    workers: usize,
+) -> Vec<Color> {
+    // Shared linear image buffer
+    let pixel_count = (width * height) as usize;
+    let imgbuf = Mutex::new(vec![Color::new(0.0, 0.0, 0.0); pixel_count]);
     // Progress bar
     let pb = ProgressBar::new(u64::from(width * height));
 
@@ -86,15 +116,11 @@ pub fn render(
         "{spinner:.green} [{elapsed_precise}] [{bar:40.red/gray}] {percent}/100% ({eta_precise})",
     ).unwrap());
 
-    let gamma_correction = gamma.recip();
-
     let w = f64::from(width).recip();
     let h = f64::from(height).recip();
     let s = (f64::from(samples) * 4.0).recip();
 
-    let pool = ThreadPool::new(workers);
-
-    let work_count = Arc::new(AtomicUsize::new(0));
+    let work_count = AtomicUsize::new(0);
 
     // Calculate number of tiles
     let tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
@@ -111,16 +137,24 @@ pub fn render(
     );
     println!();
 
-    let start = Instant::now();
+    // Workers pull tiles from a shared counter until none are left.
+    let tile_count = tiles_x * tiles_y;
+    let next_tile = AtomicUsize::new(0);
 
-    // Iterate over tiles instead of individual pixels
-    for tile_y in 0..tiles_y {
-        for tile_x in 0..tiles_x {
-            let img = Arc::clone(&imgbuf);
-            let scene = Arc::clone(&scene);
-            let work_count = Arc::clone(&work_count);
+    thread::scope(|scope| {
+        for _ in 0..workers.max(1) {
+            let imgbuf = &imgbuf;
+            let work_count = &work_count;
+            let next_tile = &next_tile;
 
-            pool.execute(move || {
+            scope.spawn(move || loop {
+                let tile = next_tile.fetch_add(1, Ordering::Relaxed) as u32;
+                if tile >= tile_count {
+                    break;
+                }
+                let tile_x = tile % tiles_x;
+                let tile_y = tile / tiles_x;
+
                 // Calculate tile boundaries
                 let x_start = tile_x * TILE_SIZE;
                 let y_start = tile_y * TILE_SIZE;
@@ -128,9 +162,8 @@ pub fn render(
                 let y_end = (y_start + TILE_SIZE).min(height);
 
                 // Collect all pixel results for this tile
-                let mut tile_pixels: Vec<(u32, u32, image::Rgb<u8>)> = Vec::with_capacity(
-                    ((x_end - x_start) * (y_end - y_start)) as usize
-                );
+                let mut tile_pixels: Vec<(usize, Color)> =
+                    Vec::with_capacity(((x_end - x_start) * (y_end - y_start)) as usize);
 
                 for y in y_start..y_end {
                     for x in x_start..x_end {
@@ -147,53 +180,41 @@ pub fn render(
 
                                     let ray = scene.camera.get_ray(u, v);
 
-                                    pixel_color += radiance(scene.as_ref(), &ray, 1, max_depth);
+                                    pixel_color += radiance(scene, &ray, 1, max_depth);
                                 }
                             }
                         }
 
-                        pixel_color = pixel_color * s;
-                        tile_pixels.push((x, y, pixel_color.to_gamma_rgb(gamma_correction)));
+                        tile_pixels.push(((y * width + x) as usize, pixel_color * s));
                     }
                 }
 
                 // Write all tile pixels at once (single lock acquisition)
                 let pixel_count = tile_pixels.len();
                 {
-                    let mut img = img.lock().unwrap();
-                    for (x, y, rgb) in tile_pixels {
-                        img.put_pixel(x, y, rgb);
+                    let mut img = imgbuf.lock().unwrap();
+                    for (idx, color) in tile_pixels {
+                        img[idx] = color;
                     }
                 }
 
                 work_count.fetch_add(pixel_count, Ordering::Relaxed);
             });
         }
-    }
 
-    let ten_millis = Duration::from_millis(50);
-    loop {
-        pb.set_position(work_count.as_ref().load(Ordering::Relaxed) as u64);
-
-        thread::sleep(ten_millis);
-
-        if pool.queued_count() == 0 {
-            break;
+        let poll_interval = Duration::from_millis(50);
+        loop {
+            let done = work_count.load(Ordering::Relaxed);
+            pb.set_position(done as u64);
+            if done >= pixel_count {
+                break;
+            }
+            thread::sleep(poll_interval);
         }
-    }
-
-    pool.join();
+    });
     pb.finish();
 
-    imgbuf.lock().unwrap().save(filename).unwrap();
-
-    let end = start.elapsed();
-
-    println!();
-    println!(
-        "Render took {} seconds.",
-        f64::from(end.as_secs() as u32) + f64::from(end.subsec_millis()) / 1000.0
-    );
+    imgbuf.into_inner().unwrap()
 }
 
 fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {

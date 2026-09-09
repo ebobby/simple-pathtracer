@@ -12,8 +12,8 @@ pub struct GPUContext {
 }
 
 impl GPUContext {
-    /// Create a new GPU context.
-    pub async fn new() -> Self {
+    /// Create a new GPU context. Returns `None` when no suitable adapter exists.
+    pub async fn new() -> Option<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::all(),
             dx12_shader_compiler: Default::default(),
@@ -27,8 +27,7 @@ impl GPUContext {
                 compatible_surface: None,
                 force_fallback_adapter: false,
             })
-            .await
-            .expect("Failed to find a suitable GPU adapter");
+            .await?;
 
         println!("GPU: {}", adapter.get_info().name);
 
@@ -45,7 +44,7 @@ impl GPUContext {
             .await
             .expect("Failed to create device");
 
-        Self { device, queue }
+        Some(Self { device, queue })
     }
 }
 

@@ -8,13 +8,13 @@ use wgpu::util::DeviceExt;
 use super::context::{GPUContext, GPUPipeline};
 use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::GPURenderParams;
-use crate::Camera;
+use crate::{Camera, Color};
 
 /// Samples per pass - balance between progress granularity and overhead
 /// Higher values = less dispatch overhead, but coarser progress updates
 const SAMPLES_PER_PASS: u32 = 500;
 
-/// Render a scene using GPU compute shaders.
+/// Render a scene using GPU compute shaders and save it as an image.
 ///
 /// # Arguments
 ///
@@ -36,13 +36,47 @@ pub fn render_gpu(
     gamma: f64,
     filename: &str,
 ) {
+    let start = Instant::now();
+
+    let pixels = render_gpu_linear(shapes, camera, width, height, samples, max_depth)
+        .expect("Failed to find a suitable GPU adapter");
+
+    // Convert to image with gamma correction
+    println!("Converting to image...");
+    let mut imgbuf = image::ImageBuffer::new(width, height);
+    let gamma_correction = 1.0 / gamma;
+
+    for (i, color) in pixels.iter().enumerate() {
+        let x = i as u32 % width;
+        let y = i as u32 / width;
+        imgbuf.put_pixel(x, y, color.to_gamma_rgb(gamma_correction));
+    }
+
+    // Save image
+    imgbuf.save(filename).expect("Failed to save image");
+
+    let elapsed = start.elapsed();
+    println!();
+    println!("Render took {:.3} seconds.", elapsed.as_secs_f64());
+    println!("Saved to: {}", filename);
+}
+
+/// Render a scene on the GPU and return linear (not gamma corrected) radiance
+/// per pixel in row-major order. Returns `None` when no GPU adapter is available.
+/// See [`render_gpu`] for the meaning of the arguments.
+pub fn render_gpu_linear(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+) -> Option<Vec<Color>> {
     println!("Simple path tracer (GPU).");
     println!(
         "Rendering a {}x{}x{}spp image, max depth of {}.",
         width, height, samples, max_depth
     );
-
-    let start = Instant::now();
 
     // Build GPU scene
     println!("Building GPU scene...");
@@ -57,7 +91,7 @@ pub fn render_gpu(
 
     // Initialize GPU
     println!("Initializing GPU...");
-    let ctx = pollster::block_on(GPUContext::new());
+    let ctx = pollster::block_on(GPUContext::new())?;
     let pipeline = GPUPipeline::new(&ctx.device);
 
     // Calculate number of passes
@@ -280,38 +314,21 @@ pub fn render_gpu(
     let data = buffer_slice.get_mapped_range();
     let pixels: &[[f32; 4]] = bytemuck::cast_slice(&data);
 
-    // Convert to image with normalization and gamma correction
-    println!("Converting to image...");
-    let mut imgbuf = image::ImageBuffer::new(width, height);
-    let gamma_correction = 1.0 / gamma;
+    // Normalize by total samples
     let sample_scale = 1.0 / (total_samples as f32);
-
-    for y in 0..height {
-        for x in 0..width {
-            let idx = (y * width + x) as usize;
-            let pixel = pixels[idx];
-
-            // Normalize by total samples and apply gamma correction
-            let r = (pixel[0] * sample_scale).powf(gamma_correction as f32);
-            let g = (pixel[1] * sample_scale).powf(gamma_correction as f32);
-            let b = (pixel[2] * sample_scale).powf(gamma_correction as f32);
-
-            let r = (r * 255.0).clamp(0.0, 255.0) as u8;
-            let g = (g * 255.0).clamp(0.0, 255.0) as u8;
-            let b = (b * 255.0).clamp(0.0, 255.0) as u8;
-
-            imgbuf.put_pixel(x, y, image::Rgb([r, g, b]));
-        }
-    }
+    let colors: Vec<Color> = pixels
+        .iter()
+        .map(|p| {
+            Color::new(
+                f64::from(p[0] * sample_scale),
+                f64::from(p[1] * sample_scale),
+                f64::from(p[2] * sample_scale),
+            )
+        })
+        .collect();
 
     drop(data);
     staging_buffer.unmap();
 
-    // Save image
-    imgbuf.save(filename).expect("Failed to save image");
-
-    let elapsed = start.elapsed();
-    println!();
-    println!("Render took {:.3} seconds.", elapsed.as_secs_f64());
-    println!("Saved to: {}", filename);
+    Some(colors)
 }
