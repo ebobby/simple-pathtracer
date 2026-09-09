@@ -226,34 +226,48 @@ fn intersect_sphere(ray: Ray, sphere: Sphere, t_min: f32, t_max: f32) -> HitReco
     let center = sphere.center.xyz;
     let radius = sphere.radius;
 
-    let oc = ray.origin - center;
+    // Cancellation-free quadratic (Ray Tracing Gems, ch. 7): the discriminant
+    // is computed from the perpendicular distance between the ray and the
+    // sphere centre instead of dot(oc, oc) - r*r, which loses all precision
+    // when |oc| is much larger than r (e.g. radius 5000 wall spheres).
+    let oc = center - ray.origin;
     let a = dot(ray.direction, ray.direction);
-    let half_b = dot(oc, ray.direction);
-    let c = dot(oc, oc) - radius * radius;
-    let discriminant = half_b * half_b - a * c;
+    let b = dot(oc, ray.direction);
+    let perp = oc - (b / a) * ray.direction;
+    let discriminant = radius * radius - dot(perp, perp);
 
     if discriminant < 0.0 {
         return hit;
     }
 
-    let sqrtd = sqrt(discriminant);
-    var root = (-half_b - sqrtd) / a;
+    let sqrtd = sqrt(a * discriminant);
+    let q = select(b - sqrtd, b + sqrtd, b > 0.0);
+    if q == 0.0 {
+        // Grazing tangent hit through the origin's foot point; treat as a miss.
+        return hit;
+    }
+    let c = dot(oc, oc) - radius * radius;
+    let t_near = c / q;
+    let t_far = q / a;
 
+    var root = min(t_near, t_far);
     if root < t_min || root > t_max {
-        root = (-half_b + sqrtd) / a;
+        root = max(t_near, t_far);
         if root < t_min || root > t_max {
             return hit;
         }
     }
 
     hit.t = root;
-    hit.p = ray.origin + ray.direction * root;
-    hit.normal = (hit.p - center) / radius;
+    hit.normal = normalize(ray.origin + ray.direction * root - center);
+    // Re-project onto the sphere surface so the hit point does not drift
+    // off the surface for large spheres.
+    hit.p = center + hit.normal * radius;
     hit.material_idx = sphere.material_idx;
     hit.valid = true;
 
     // Compute UV coordinates (spherical mapping)
-    let d = normalize(hit.p - center);
+    let d = hit.normal;
     hit.u = 0.5 + atan2(d.z, d.x) / (2.0 * 3.14159265359);
     hit.v = 0.5 - asin(d.y) / 3.14159265359;
 
