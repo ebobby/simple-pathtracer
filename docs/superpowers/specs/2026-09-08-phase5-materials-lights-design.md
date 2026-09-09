@@ -105,3 +105,36 @@ Two things worth knowing when using the new pieces:
   small bright sun those paths appear as sparse bright dots. A wider cone
   reduces this; a firefly clamp would remove it at the cost of bias and is
   not implemented.
+
+## Addendum: exposure and tone mapping
+
+The first outdoor render clipped: the sunlit ground reflects a radiance near
+1.6 and the output stage clamped at 1.0. Added `Tonemap { exposure, curve,
+gamma }` with `ToneCurve::{Clamp, Reinhard, Aces}` (Narkowicz ACES fit),
+applied on the CPU and GPU offline paths before gamma and in the viewer's blit
+shader before the sRGB surface. `Tonemap::default()` reproduces the old clamp
+exactly (tested). New entry points: `render_with_tonemap`, `render_gpu_with`,
+`render_realtime_with`; the existing functions keep their behaviour. The
+outdoor example uses exposure 0.25 with ACES.
+
+## Addendum: depth of field, bloom, composition
+
+* Thin-lens camera: `Camera::with_lens(aperture, focus_distance)` places the
+  image rectangle on the focus plane and jitters the ray origin over the lens
+  disc from a dedicated sample slot (`SLOT_LENS`; bounce slots now start at
+  2). The GPU carries the lens radius in the camera origin's padding. The
+  viewer keeps the lens through its camera controller.
+* Bloom: `Tonemap::with_bloom(Bloom { threshold, intensity, radius })`, a
+  separable Gaussian over radiance above the threshold, added back before the
+  tone curve. Offline outputs only (`apply_image`); the viewer skips it.
+* Tests: lens samples converge on the focus plane; pinhole ignores lens
+  samples; field of view survives focusing; bloom spreads a bright pixel and
+  leaves dark images untouched; no-bloom output equals per-pixel output.
+* The parity camera now has a lens. That exposed a latent GPU bug: the
+  dielectric divided an already-normalised cosine by the ray direction
+  length, harmless while camera rays were near unit length and a 3.6% error
+  once the image rectangle moved to the focus plane. Fixed.
+* `examples/outdoor.rs` reworked: lower camera, overlapping spheres of
+  varied size, a near frosted sphere outside the focus plane, small spheres
+  receding into the distance, sun from behind-left, exposure 0.25, ACES,
+  bloom. GPU 9.4 s at 800x600, 1000 spp x4.
