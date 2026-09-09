@@ -1,6 +1,5 @@
 //! Axis-aligned minimum bounding box.
 
-use crate::ray::Ray;
 use crate::Vec3;
 
 #[derive(Clone, Copy, Debug)]
@@ -25,55 +24,32 @@ impl AABB {
         AABB { min, max }
     }
 
-    pub fn intersect(&self, ray: &Ray, tmin: f64, tmax: f64) -> bool {
-        // Check X axis
-        let mut inv_d = ray.direction.x.recip();
-        let mut t0 = (self.min.x - ray.origin.x) * inv_d;
-        let mut t1 = (self.max.x - ray.origin.x) * inv_d;
+    pub fn centroid(&self) -> Vec3 {
+        (self.min + self.max) * 0.5
+    }
 
-        if inv_d < 0.0 {
-            std::mem::swap(&mut t0, &mut t1)
+    /// Slab test with a precomputed inverse ray direction.
+    ///
+    /// Returns the entry distance of the ray into the box, clamped to `tmin`,
+    /// when the ray overlaps the box within `(tmin, tmax)`.
+    #[inline]
+    pub fn intersect(&self, origin: Vec3, inv_dir: Vec3, tmin: f64, tmax: f64) -> Option<f64> {
+        let t0 = (self.min - origin) * inv_dir;
+        let t1 = (self.max - origin) * inv_dir;
+
+        let t_enter = tmin
+            .max(t0.x.min(t1.x))
+            .max(t0.y.min(t1.y))
+            .max(t0.z.min(t1.z));
+        let t_exit = tmax
+            .min(t0.x.max(t1.x))
+            .min(t0.y.max(t1.y))
+            .min(t0.z.max(t1.z));
+
+        if t_exit > t_enter {
+            Some(t_enter)
+        } else {
+            None
         }
-
-        let tmin = if t0 > tmin { t0 } else { tmin };
-        let tmax = if t1 < tmax { t1 } else { tmax };
-
-        if tmax <= tmin {
-            return false;
-        }
-
-        // Check Y axis
-        inv_d = ray.direction.y.recip();
-        t0 = (self.min.y - ray.origin.y) * inv_d;
-        t1 = (self.max.y - ray.origin.y) * inv_d;
-
-        if inv_d < 0.0 {
-            std::mem::swap(&mut t0, &mut t1)
-        }
-
-        let tmin = if t0 > tmin { t0 } else { tmin };
-        let tmax = if t1 < tmax { t1 } else { tmax };
-
-        if tmax <= tmin {
-            return false;
-        }
-
-        // Check Z axis
-        inv_d = ray.direction.z.recip();
-        t0 = (self.min.z - ray.origin.z) * inv_d;
-        t1 = (self.max.z - ray.origin.z) * inv_d;
-
-        if inv_d < 0.0 {
-            std::mem::swap(&mut t0, &mut t1)
-        }
-
-        let tmin = if t0 > tmin { t0 } else { tmin };
-        let tmax = if t1 < tmax { t1 } else { tmax };
-
-        if tmax <= tmin {
-            return false;
-        }
-
-        true
     }
 }

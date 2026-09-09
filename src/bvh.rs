@@ -1,107 +1,143 @@
-//! Bounding volume hierarchy.
+//! Bounding volume hierarchy stored as a flat array of nodes.
 
 use crate::aabb::AABB;
 use crate::intersectable::{Intersectable, Intersection};
 use crate::ray::Ray;
-use crate::Hitable;
+use crate::{Hitable, Vec3};
 
-use rand::Rng;
+/// One node of the flattened tree. Interior nodes have their left child at
+/// `index + 1` (depth-first layout) and their right child at `child_or_shape`.
+/// Leaves reference a single shape at `child_or_shape`.
+#[derive(Debug, Clone, Copy)]
+struct Node {
+    bounding_box: AABB,
+    child_or_shape: u32,
+    is_leaf: bool,
+}
 
 #[derive(Debug)]
 pub struct BVH {
-    left: Option<Hitable>,
-    right: Option<Hitable>,
-    bounding_box: AABB,
+    nodes: Vec<Node>,
+    shapes: Vec<Hitable>,
 }
 
 impl BVH {
-    pub fn from_vec(mut objects: Vec<Hitable>) -> Self {
+    pub fn from_vec(objects: Vec<Hitable>) -> Self {
         if objects.is_empty() {
             panic!("I need a non-empty object list!");
         }
 
-        let mut rng = rand::thread_rng();
-        let axis: usize = rng.gen_range(0..3);
+        let boxes: Vec<AABB> = objects.iter().map(|o| o.bounding_box()).collect();
+        let mut order: Vec<u32> = (0..objects.len() as u32).collect();
+        let mut nodes = Vec::with_capacity(2 * objects.len() - 1);
 
-        objects.sort_by(|a, b| {
-            let a_box = a.bounding_box();
-            let b_box = b.bounding_box();
-
-            match axis {
-                0 => a_box.min.x.partial_cmp(&b_box.min.x).unwrap(),
-                1 => a_box.min.y.partial_cmp(&b_box.min.y).unwrap(),
-                _ => a_box.min.z.partial_cmp(&b_box.min.z).unwrap(),
-            }
-        });
-
-        let (left, right, bounding_box): (Option<Hitable>, Option<Hitable>, AABB) =
-            match objects.len() {
-                1 => {
-                    let l = objects.remove(0);
-                    let bb = l.bounding_box();
-
-                    (Some(l), None, bb)
-                }
-                2 => {
-                    let l = objects.remove(0);
-                    let r = objects.remove(0);
-                    let bb = AABB::surrounding(l.bounding_box(), r.bounding_box());
-
-                    (Some(l), Some(r), bb)
-                }
-                size => {
-                    let rest = objects.split_off(size / 2);
-
-                    let l = Self::from_vec(objects);
-                    let r = Self::from_vec(rest);
-
-                    let bb = AABB::surrounding(l.bounding_box(), r.bounding_box());
-
-                    (Some(Box::new(l)), Some(Box::new(r)), bb)
-                }
-            };
+        Self::build(&boxes, &mut order, &mut nodes);
 
         Self {
-            left,
-            right,
-            bounding_box,
+            nodes,
+            shapes: objects,
         }
+    }
+
+    /// Append the subtree for `order` (a set of shape indices) to `nodes`,
+    /// splitting on the longest axis at the median.
+    fn build(boxes: &[AABB], order: &mut [u32], nodes: &mut Vec<Node>) {
+        let bounding_box = order
+            .iter()
+            .map(|&i| boxes[i as usize])
+            .reduce(AABB::surrounding)
+            .unwrap();
+
+        if order.len() == 1 {
+            nodes.push(Node {
+                bounding_box,
+                child_or_shape: order[0],
+                is_leaf: true,
+            });
+            return;
+        }
+
+        let extent = bounding_box.max - bounding_box.min;
+        let axis = if extent.x >= extent.y && extent.x >= extent.z {
+            0
+        } else if extent.y >= extent.z {
+            1
+        } else {
+            2
+        };
+        let key = |i: &u32| -> f64 {
+            let c = boxes[*i as usize].centroid();
+            match axis {
+                0 => c.x,
+                1 => c.y,
+                _ => c.z,
+            }
+        };
+        let mid = order.len() / 2;
+        order.select_nth_unstable_by(mid, |a, b| key(a).partial_cmp(&key(b)).unwrap());
+
+        let (left, right) = order.split_at_mut(mid);
+
+        let this = nodes.len();
+        nodes.push(Node {
+            bounding_box,
+            child_or_shape: u32::MAX, // patched after the left subtree is built
+            is_leaf: false,
+        });
+
+        Self::build(boxes, left, nodes);
+        nodes[this].child_or_shape = nodes.len() as u32;
+        Self::build(boxes, right, nodes);
     }
 }
 
 impl Intersectable for BVH {
     fn bounding_box(&self) -> AABB {
-        self.bounding_box
+        self.nodes[0].bounding_box
     }
 
     fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection<'_>> {
-        if !self.bounding_box.intersect(ray, min, max) {
-            return None;
+        let origin = ray.origin;
+        let inv_dir = Vec3::new(
+            ray.direction.x.recip(),
+            ray.direction.y.recip(),
+            ray.direction.z.recip(),
+        );
+
+        let mut closest: Option<Intersection<'_>> = None;
+        let mut closest_t = max;
+
+        // Explicit stack of node indices; each node's box is tested when popped.
+        let mut stack = [0u32; 64];
+        let mut stack_len = 1usize;
+
+        while stack_len > 0 {
+            stack_len -= 1;
+            let index = stack[stack_len];
+            let node = &self.nodes[index as usize];
+
+            if node
+                .bounding_box
+                .intersect(origin, inv_dir, min, closest_t)
+                .is_none()
+            {
+                continue;
+            }
+
+            if node.is_leaf {
+                if let Some(hit) =
+                    self.shapes[node.child_or_shape as usize].intersect(ray, min, closest_t)
+                {
+                    closest_t = hit.t;
+                    closest = Some(hit);
+                }
+            } else {
+                stack[stack_len] = index + 1;
+                stack[stack_len + 1] = node.child_or_shape;
+                stack_len += 2;
+            }
         }
 
-        match (&self.left, &self.right) {
-            // We have two nodes, check intersection on both.
-            (Some(left), Some(right)) => {
-                match (
-                    left.intersect(ray, min, max),
-                    right.intersect(ray, min, max),
-                ) {
-                    // We have two hits, return the closest one.
-                    (Some(left_hit), Some(right_hit)) => {
-                        if left_hit.t < right_hit.t {
-                            Some(left_hit)
-                        } else {
-                            Some(right_hit)
-                        }
-                    }
-                    (Some(left_hit), None) => Some(left_hit),
-                    (None, Some(right_hit)) => Some(right_hit),
-                    (None, None) => None,
-                }
-            }
-            (Some(left), None) => left.intersect(ray, min, max),
-            (None, Some(right)) => right.intersect(ray, min, max),
-            (None, None) => None,
-        }
+        closest
     }
 }
