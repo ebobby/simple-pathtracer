@@ -217,35 +217,53 @@ pub fn render_linear(
     imgbuf.into_inner().unwrap()
 }
 
+/// Estimate the radiance arriving along `ray`.
+///
+/// `depth` is the number of the surface interaction the ray is about to
+/// have (1 for camera rays); the walk stops after `max_depth` interactions.
 fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
-    if let Some(intersection) = scene.world.intersect(ray, 0.0001, std::f64::INFINITY) {
+    let mut ray = ray.clone();
+    let mut depth = depth;
+    let mut color = Color::new(0.0, 0.0, 0.0);
+    let mut throughput = Color::new(1.0, 1.0, 1.0);
+
+    loop {
+        let Some(intersection) = scene.world.intersect(&ray, 0.0001, f64::INFINITY) else {
+            break;
+        };
+
         let emitted = intersection
             .material
             .emit(intersection.u, intersection.v, intersection.p);
+        color += throughput * emitted;
 
-        if let Some(scattered) = intersection.material.scatter(ray, &intersection) {
-            let mut attenuation = scattered.attenuation;
+        let Some(scattered) = intersection.material.scatter(&ray, &intersection) else {
+            break;
+        };
+
+        let mut attenuation = scattered.attenuation;
+
+        // Russian roulette: after a few bounces, terminate paths with a
+        // probability proportional to how little light they still carry.
+        if depth > 5 {
             let p = (attenuation.r + attenuation.g + attenuation.b) / 3.0;
-
-            if depth > 5 {
-                if rng::get_random_number() < p {
-                    attenuation = attenuation / p;
-                } else {
-                    return emitted;
-                }
-            }
-
-            if depth < max_depth {
-                emitted + attenuation * radiance(scene, &scattered.scattered, depth + 1, max_depth)
+            if rng::get_random_number() < p {
+                attenuation = attenuation / p;
             } else {
-                emitted
+                break;
             }
-        } else {
-            emitted
         }
-    } else {
-        Color::new(0.0, 0.0, 0.0)
+
+        if depth >= max_depth {
+            break;
+        }
+
+        throughput = throughput * attenuation;
+        ray = scattered.scattered;
+        depth += 1;
     }
+
+    color
 }
 
 fn tent_filter_factor() -> f64 {

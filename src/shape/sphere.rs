@@ -23,42 +23,38 @@ impl Intersectable for Sphere {
 
     fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection<'_>> {
         let oc = ray.origin - self.center;
-        let a = ray.direction.dot(ray.direction);
-        let b = 2.0 * oc.dot(ray.direction);
-        let c = oc.dot(oc) - self.radius * self.radius;
+        let a = ray.direction.norm();
+        let half_b = oc.dot(ray.direction);
+        let c = oc.norm() - self.radius * self.radius;
 
-        let discriminant = b * b - 4.0 * a * c;
-
-        let divisor = (2.0 * a).recip();
-        let dis_sqrt = discriminant.sqrt();
-
-        if discriminant > 0.0 {
-            let t0 = (-b - dis_sqrt) * divisor;
-            let t1 = (-b + dis_sqrt) * divisor;
-
-            let t = if t0 < max && t0 > min {
-                t0
-            } else if t1 < max && t1 > min {
-                t1
-            } else {
-                return None;
-            };
-
-            let p = ray.point_at(t);
-            let normal = (p - self.center) / self.radius;
-            let (u, v) = sphere_texture_uv(normal);
-
-            Some(Intersection {
-                p,
-                t,
-                u,
-                v,
-                normal,
-                material: &self.material,
-            })
-        } else {
-            None
+        let discriminant = half_b * half_b - a * c;
+        if discriminant <= 0.0 {
+            return None;
         }
+
+        let sqrtd = discriminant.sqrt();
+        let inv_a = a.recip();
+
+        let mut t = (-half_b - sqrtd) * inv_a;
+        if t <= min || t >= max {
+            t = (-half_b + sqrtd) * inv_a;
+            if t <= min || t >= max {
+                return None;
+            }
+        }
+
+        let p = ray.point_at(t);
+        let normal = (p - self.center) / self.radius;
+        let (u, v) = sphere_texture_uv(normal);
+
+        Some(Intersection {
+            p,
+            t,
+            u,
+            v,
+            normal,
+            material: &self.material,
+        })
     }
 }
 
