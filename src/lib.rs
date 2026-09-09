@@ -38,7 +38,7 @@ pub use material::{Material, Principled};
 pub use sampler::Sampler;
 pub use scene::Scene;
 pub use texture::Texture;
-pub use tonemap::{ToneCurve, Tonemap};
+pub use tonemap::{Bloom, ToneCurve, Tonemap};
 pub use vector::Vec3;
 
 use intersectable::*;
@@ -115,13 +115,7 @@ pub fn render_with_tonemap(
 
     let pixels = render_linear(&scene, width, height, samples, max_depth, workers);
 
-    let mut imgbuf = image::ImageBuffer::new(width, height);
-    for (i, color) in pixels.iter().enumerate() {
-        let x = i as u32 % width;
-        let y = i as u32 / width;
-        imgbuf.put_pixel(x, y, tonemap.apply(*color));
-    }
-    imgbuf.save(filename).unwrap();
+    tonemap.apply_image(&pixels, width, height).save(filename).unwrap();
 
     let end = start.elapsed();
 
@@ -239,7 +233,8 @@ pub fn render_linear_with(
                                     let u = ((f64::from(sx) + 0.5 + dx) * 0.5 + f64::from(x)) * w;
                                     let v = ((f64::from(sy) + 0.5 + dy) * 0.5 + f64::from(y)) * h;
 
-                                    let ray = scene.camera.get_ray(u, v);
+                                    let (lu, lv) = sampler.get_2d(sampler::SLOT_LENS);
+                                    let ray = scene.camera.get_ray_lens(u, v, lu, lv);
 
                                     pixel_color += radiance_with(
                                         scene, &ray, 1, max_depth, integrator, &sampler,

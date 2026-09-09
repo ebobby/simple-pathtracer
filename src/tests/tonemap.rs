@@ -43,6 +43,7 @@ fn exposure_scales_before_the_curve_and_gamma_encodes_after() {
         exposure: 2.0,
         curve: ToneCurve::Clamp,
         gamma: 2.2,
+        bloom: None,
     };
     // 0.25 * 2 = 0.5, then 0.5^(1/2.2) * 255 ≈ 186
     let rgb = tonemap.apply(grey(0.25));

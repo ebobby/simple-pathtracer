@@ -86,15 +86,9 @@ pub fn render_gpu_with(
     )
     .expect("Failed to find a suitable GPU adapter");
 
-    // Convert to image with exposure, tone curve and gamma
+    // Convert to image with exposure, bloom, tone curve and gamma
     println!("Converting to image...");
-    let mut imgbuf = image::ImageBuffer::new(width, height);
-
-    for (i, color) in pixels.iter().enumerate() {
-        let x = i as u32 % width;
-        let y = i as u32 / width;
-        imgbuf.put_pixel(x, y, tonemap.apply(*color));
-    }
+    let imgbuf = tonemap.apply_image(&pixels, width, height);
 
     // Save image
     imgbuf.save(filename).expect("Failed to save image");

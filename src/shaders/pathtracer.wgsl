@@ -27,8 +27,8 @@ const LIGHT_SKY: u32 = 0xFFFFFFFEu;
 const LIGHT_SUN: u32 = 0xFFFFFFFFu;
 
 struct Camera {
-    origin: vec4<f32>,
-    corner: vec4<f32>,
+    origin: vec4<f32>,     // xyz position, w = thin-lens radius (0 = pinhole)
+    corner: vec4<f32>,     // image rectangle on the focus plane
     horizontal: vec4<f32>,
     vertical: vec4<f32>,
 }
@@ -198,12 +198,13 @@ fn sample_2d(slot: u32) -> vec2<f32> {
 }
 
 const SLOT_PIXEL: u32 = 0u;
+const SLOT_LENS: u32 = 1u;
 
 // First slot of a bounce: BSDF direction, light sample, then
 // (light selection / lobe choice / Fresnel, Russian roulette),
 // and a secondary BSDF direction.
 fn bounce_slot(bounce: u32) -> u32 {
-    return 1u + 4u * bounce;
+    return 2u + 4u * bounce;
 }
 
 // Build orthonormal basis from normal (Duff et al. 2017)
@@ -241,10 +242,20 @@ fn generate_ray(pixel: vec2<u32>) -> Ray {
     let u = (f32(pixel.x) + jitter.x) / f32(params.width);
     let v = (f32(pixel.y) + jitter.y) / f32(params.height);
 
-    let origin = camera.origin.xyz;
-    let direction = camera.corner.xyz + camera.horizontal.xyz * u + camera.vertical.xyz * v - origin;
+    let focus_point = camera.corner.xyz + camera.horizontal.xyz * u + camera.vertical.xyz * v;
+    var origin = camera.origin.xyz;
+    let lens_radius = camera.origin.w;
+    if lens_radius > 0.0 {
+        // Uniform point on the lens disc, in the camera's u/v basis
+        let lens = sample_2d(SLOT_LENS);
+        let r = lens_radius * sqrt(lens.x);
+        let phi = 2.0 * PI * lens.y;
+        let cu = normalize(camera.horizontal.xyz);
+        let cv = normalize(camera.vertical.xyz);
+        origin = origin + cu * (r * cos(phi)) + cv * (r * sin(phi));
+    }
 
-    return Ray(origin, direction);
+    return Ray(origin, focus_point - origin);
 }
 
 // ============================================================================

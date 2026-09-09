@@ -7,12 +7,16 @@ use super::Vec3;
 #[derive(Debug, Clone)]
 pub struct Camera {
     look_from: Vec3,
+    /// Corner and extents of the image rectangle, placed on the focus plane.
     corner: Vec3,
     horizontal: Vec3,
     vertical: Vec3,
     u: Vec3,
     v: Vec3,
     w: Vec3,
+    /// Thin-lens radius (aperture / 2); 0 is a pinhole.
+    lens_radius: f64,
+    focus_distance: f64,
 }
 
 impl Camera {
@@ -49,6 +53,53 @@ impl Camera {
             u,
             v,
             w,
+            lens_radius: 0.0,
+            focus_distance: 1.0,
+        }
+    }
+
+    /// Thin-lens depth of field: `aperture` is the lens diameter (0 for a
+    /// pinhole) and `focus_distance` the distance from the camera to the
+    /// plane in sharp focus.
+    pub fn with_lens(mut self, aperture: f64, focus_distance: f64) -> Self {
+        let focus_distance = focus_distance.max(1e-6);
+        // Rescale the image rectangle from its current focus plane to the new one
+        let scale = focus_distance / self.focus_distance;
+        let to_corner = self.corner - self.look_from;
+        self.corner = self.look_from + to_corner * scale;
+        self.horizontal = self.horizontal * scale;
+        self.vertical = self.vertical * scale;
+        self.lens_radius = aperture.max(0.0) * 0.5;
+        self.focus_distance = focus_distance;
+        self
+    }
+
+    pub fn lens_radius(&self) -> f64 {
+        self.lens_radius
+    }
+
+    pub fn focus_distance(&self) -> f64 {
+        self.focus_distance
+    }
+
+    /// Generate a ray through screen point `(s, t)` from a point on the lens
+    /// chosen by the uniforms `(lu, lv)`. With a pinhole the lens sample is
+    /// ignored.
+    pub fn get_ray_lens(&self, s: f64, t: f64, lu: f64, lv: f64) -> Ray {
+        let target = self.corner + self.horizontal * s + self.vertical * t;
+        if self.lens_radius <= 0.0 {
+            return Ray {
+                origin: self.look_from,
+                direction: target - self.look_from,
+            };
+        }
+        // Uniform point on the lens disc
+        let r = self.lens_radius * lu.sqrt();
+        let phi = 2.0 * std::f64::consts::PI * lv;
+        let origin = self.look_from + self.u * (r * phi.cos()) + self.v * (r * phi.sin());
+        Ray {
+            origin,
+            direction: target - origin,
         }
     }
 
@@ -92,8 +143,8 @@ impl Camera {
 
     /// Returns the vertical field of view in degrees.
     pub fn vfov(&self) -> f64 {
-        // vertical.length() = 2 * half_height, and half_height = tan(fov/2)
-        let half_height = self.vertical.length() / 2.0;
+        // vertical.length() = 2 * half_height * focus_distance, half_height = tan(fov/2)
+        let half_height = self.vertical.length() / (2.0 * self.focus_distance);
         2.0 * half_height.atan().to_degrees()
     }
 }

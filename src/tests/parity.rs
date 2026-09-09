@@ -62,6 +62,7 @@ fn shapes() -> (Vec<Sphere>, Vec<Disc>) {
     (spheres, discs)
 }
 
+/// Thin lens focused on the middle sphere, so depth of field is compared too.
 fn camera() -> Camera {
     Camera::new(
         Vec3::new(0.0, 2.0, 8.0),
@@ -70,6 +71,7 @@ fn camera() -> Camera {
         f64::from(WIDTH) / f64::from(HEIGHT),
         0.0,
     )
+    .with_lens(0.4, 8.0)
 }
 
 /// A dim blue sky plus a low sun, so misses and shadow rays both matter.

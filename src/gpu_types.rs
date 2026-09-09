@@ -359,8 +359,11 @@ pub struct GPUCamera {
 
 impl From<&Camera> for GPUCamera {
     fn from(camera: &Camera) -> Self {
+        let mut origin: GPUVec3 = camera.look_from().into();
+        // The lens radius rides in the origin's padding slot
+        origin._pad = camera.lens_radius() as f32;
         Self {
-            origin: camera.look_from().into(),
+            origin,
             corner: camera.corner().into(),
             horizontal: camera.horizontal().into(),
             vertical: camera.vertical().into(),

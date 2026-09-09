@@ -110,11 +110,12 @@ impl Sampler {
 
 /// Pair slot layout along a path.
 pub const SLOT_PIXEL: u32 = 0;
+pub const SLOT_LENS: u32 = 1;
 
 /// First slot of bounce `bounce` (0-based). Each bounce uses four slots:
 /// BSDF direction, light sample, (light selection / lobe choice / Fresnel,
 /// Russian roulette), and a secondary BSDF direction.
 #[inline]
 pub fn bounce_slot(bounce: u32) -> u32 {
-    1 + 4 * bounce
+    2 + 4 * bounce
 }

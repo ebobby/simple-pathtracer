@@ -56,6 +56,8 @@ struct CameraController {
     yaw: f64,   // Rotation around Y axis (left/right)
     pitch: f64, // Rotation around X axis (up/down)
     fov: f64,
+    aperture: f64,
+    focus_distance: f64,
 
     // Movement state
     forward: bool,
@@ -88,6 +90,8 @@ impl CameraController {
             yaw,
             pitch,
             fov: camera.vfov(),
+            aperture: camera.lens_radius() * 2.0,
+            focus_distance: camera.focus_distance(),
             forward: false,
             backward: false,
             left: false,
@@ -181,7 +185,8 @@ impl CameraController {
         let forward = crate::Vec3::new(cos_yaw * cos_pitch, sin_pitch, sin_yaw * cos_pitch);
         let look_at = look_from + forward;
 
-        let camera = Camera::new(look_from, look_at, self.fov, aspect_ratio, 0.0);
+        let camera = Camera::new(look_from, look_at, self.fov, aspect_ratio, 0.0)
+            .with_lens(self.aperture, self.focus_distance);
         GPUCamera::from_camera(&camera)
     }
 
@@ -923,7 +928,6 @@ impl RealtimeApp {
         }
         queue.submit(Some(encoder.finish()));
         output.present();
-
         self.frame_count += 1;
 
         // Print status periodically
