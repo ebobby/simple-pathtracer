@@ -6,6 +6,7 @@ use crate::Vec3;
 
 mod dielectric;
 mod diffuse_light;
+pub(crate) mod ggx;
 mod lambertian;
 mod metal;
 
@@ -79,6 +80,34 @@ impl Material {
         }
     }
 
+    /// BRDF value and solid-angle pdf for reflecting unit `wo` (towards the
+    /// viewer) into unit `wi` (towards the light) at `intersection`. `None`
+    /// for delta materials (mirror, glass, lights) and for directions below
+    /// the surface. Used for light sampling.
+    pub fn eval(&self, wo: Vec3, wi: Vec3, intersection: &Intersection) -> Option<(Color, f64)> {
+        let normal = intersection.normal;
+        match self {
+            Material::Lambertian(lambertian) => {
+                let cos_i = wi.dot(normal);
+                if cos_i <= 0.0 || wo.dot(normal) <= 0.0 {
+                    return None;
+                }
+                let albedo = lambertian
+                    .albedo
+                    .value(intersection.u, intersection.v, intersection.p);
+                Some((albedo / std::f64::consts::PI, cos_i / std::f64::consts::PI))
+            }
+            Material::Metal(metal) if metal.fuzz >= ggx::MIN_ALPHA => {
+                let (f, pdf) = ggx::eval(metal.fuzz, wo, wi, normal)?;
+                let albedo = metal
+                    .albedo
+                    .value(intersection.u, intersection.v, intersection.p);
+                Some((albedo * f, pdf))
+            }
+            _ => None,
+        }
+    }
+
     pub fn scatter(
         &self,
         ray: &Ray,
@@ -92,16 +121,6 @@ impl Material {
             Material::DiffuseLight(light) => light.scatter(ray, intersection, uniforms),
         }
     }
-}
-
-/// Uniformly distributed point inside the unit ball from three uniforms.
-#[inline]
-fn random_in_unit_ball(u1: f64, u2: f64, u3: f64) -> Vec3 {
-    let z = 1.0 - 2.0 * u1;
-    let r = (1.0 - z * z).max(0.0).sqrt();
-    let phi = 2.0 * std::f64::consts::PI * u2;
-    let radius = u3.cbrt();
-    Vec3::new(r * phi.cos(), r * phi.sin(), z) * radius
 }
 
 /// Cosine-weighted direction on the hemisphere around the unit `normal`,

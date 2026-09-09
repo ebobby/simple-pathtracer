@@ -342,13 +342,14 @@ fn radiance_with(
                 // continuation to share the light with, so the light sample
                 // takes full weight.
                 let last_vertex = depth >= max_depth;
+                let wo = -ray.direction.normalize();
                 let u_light = sampler.get_2d(slot + 1);
                 let u_select = *u_scalar.get_or_insert_with(|| sampler.get_2d(slot + 2));
                 color += throughput
                     * sample_direct_light(
                         scene,
                         &intersection,
-                        scattered.attenuation,
+                        wo,
                         last_vertex,
                         u_light,
                         u_select.0,
@@ -387,14 +388,14 @@ fn radiance_with(
     color
 }
 
-/// Direct lighting at a Lambertian vertex with `albedo`, from one light
-/// chosen in proportion to its power, weighted against BSDF sampling with
-/// the power heuristic unless `full_weight` says no BSDF continuation will
-/// follow.
+/// Direct lighting at a non-delta vertex seen from unit direction `wo`, from
+/// one light chosen in proportion to its power, weighted against BSDF
+/// sampling with the power heuristic unless `full_weight` says no BSDF
+/// continuation will follow.
 fn sample_direct_light(
     scene: &Scene,
     intersection: &Intersection,
-    albedo: Color,
+    wo: Vec3,
     full_weight: bool,
     u_light: (f64, f64),
     u_select: f64,
@@ -405,9 +406,12 @@ fn sample_direct_light(
         return Color::new(0.0, 0.0, 0.0);
     };
     let cos_theta = sample.direction.dot(intersection.normal);
-    if cos_theta <= 0.0 {
+    let Some((f, pdf_bsdf)) = intersection
+        .material
+        .eval(wo, sample.direction, intersection)
+    else {
         return Color::new(0.0, 0.0, 0.0);
-    }
+    };
 
     let shadow_ray = Ray {
         origin: intersection.p,
@@ -422,15 +426,13 @@ fn sample_direct_light(
 
     let emitted = hit.material.emit(hit.u, hit.v, hit.p);
     let pdf_light = sample.pdf * select_pdf;
-    let pdf_bsdf = cos_theta / std::f64::consts::PI;
     let weight = if full_weight {
         1.0
     } else {
         light::power_heuristic(pdf_light, pdf_bsdf)
     };
 
-    // f * cos / pdf with f = albedo / π
-    albedo * emitted * (cos_theta / (std::f64::consts::PI * pdf_light) * weight)
+    f * emitted * (cos_theta / pdf_light * weight)
 }
 
 /// Map a uniform in [0, 1) to a tent-distributed offset in (-1, 1).

@@ -86,8 +86,8 @@ struct HitRecord {
 struct ScatterResult {
     ray: Ray,
     attenuation: vec3<f32>,
-    pdf: f32,      // solid-angle pdf for diffuse scattering, 0 for specular
-    diffuse: bool,
+    pdf: f32,        // solid-angle pdf for non-delta scattering, 0 for specular
+    non_delta: bool, // true when the material can take light samples
     valid: bool,
 }
 
@@ -187,14 +187,6 @@ const SLOT_PIXEL: u32 = 0u;
 // (light selection / fuzz radius / Fresnel, Russian roulette).
 fn bounce_slot(bounce: u32) -> u32 {
     return 1u + 3u * bounce;
-}
-
-// Uniformly distributed point inside the unit ball from three uniforms.
-fn random_in_unit_ball(u: vec3<f32>) -> vec3<f32> {
-    let z = 1.0 - 2.0 * u.x;
-    let r = sqrt(max(1.0 - z * z, 0.0));
-    let phi = 2.0 * PI * u.y;
-    return vec3<f32>(r * cos(phi), r * sin(phi), z) * pow(u.z, 1.0 / 3.0);
 }
 
 // Build orthonormal basis from normal (Duff et al. 2017)
@@ -402,6 +394,109 @@ fn intersect_bvh(ray: Ray) -> HitRecord {
 }
 
 // ============================================================================
+// GGX microfacet reflection (mirrors src/material/ggx.rs)
+// ============================================================================
+
+const GGX_MIN_ALPHA: f32 = 1e-3;
+
+fn ggx_distribution(cos_h: f32, alpha: f32) -> f32 {
+    if cos_h <= 0.0 {
+        return 0.0;
+    }
+    let a2 = alpha * alpha;
+    let t = cos_h * cos_h * (a2 - 1.0) + 1.0;
+    return a2 / (PI * t * t);
+}
+
+fn ggx_lambda(cos_theta: f32, alpha: f32) -> f32 {
+    let cos2 = cos_theta * cos_theta;
+    let tan2 = max(1.0 - cos2, 0.0) / cos2;
+    return (-1.0 + sqrt(1.0 + alpha * alpha * tan2)) * 0.5;
+}
+
+fn ggx_g1(cos_theta: f32, alpha: f32) -> f32 {
+    return 1.0 / (1.0 + ggx_lambda(cos_theta, alpha));
+}
+
+fn ggx_g2(cos_o: f32, cos_i: f32, alpha: f32) -> f32 {
+    return 1.0 / (1.0 + ggx_lambda(cos_o, alpha) + ggx_lambda(cos_i, alpha));
+}
+
+// Sample a visible microfacet normal in the local frame (z = normal).
+fn ggx_sample_visible_normal(wo: vec3<f32>, alpha: f32, u1: f32, u2: f32) -> vec3<f32> {
+    let vh = normalize(vec3<f32>(alpha * wo.x, alpha * wo.y, wo.z));
+    let len_sq = vh.x * vh.x + vh.y * vh.y;
+    var t1 = vec3<f32>(1.0, 0.0, 0.0);
+    if len_sq > 0.0 {
+        t1 = vec3<f32>(-vh.y, vh.x, 0.0) / sqrt(len_sq);
+    }
+    let t2 = cross(vh, t1);
+
+    let r = sqrt(u1);
+    let phi = 2.0 * PI * u2;
+    let p1 = r * cos(phi);
+    var p2 = r * sin(phi);
+    let s = 0.5 * (1.0 + vh.z);
+    p2 = (1.0 - s) * sqrt(max(1.0 - p1 * p1, 0.0)) + s * p2;
+
+    let nh = t1 * p1 + t2 * p2 + vh * sqrt(max(1.0 - p1 * p1 - p2 * p2, 0.0));
+    return normalize(vec3<f32>(alpha * nh.x, alpha * nh.y, max(nh.z, 0.0)));
+}
+
+// Visible-normal-sampling pdf of wi from wo, over the whole sphere.
+fn ggx_pdf(alpha: f32, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> f32 {
+    let cos_o = dot(wo, normal);
+    if cos_o <= 0.0 {
+        return 0.0;
+    }
+    let h = normalize(wo + wi);
+    if dot(wo, h) <= 0.0 {
+        return 0.0;
+    }
+    return ggx_g1(cos_o, alpha) * ggx_distribution(dot(h, normal), alpha) / (4.0 * cos_o);
+}
+
+// BRDF value without albedo (x) and pdf (y); both zero when invalid.
+fn ggx_eval(alpha: f32, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> vec2<f32> {
+    let cos_o = dot(wo, normal);
+    let cos_i = dot(wi, normal);
+    if cos_o <= 0.0 || cos_i <= 0.0 {
+        return vec2<f32>(0.0);
+    }
+    let h = normalize(wo + wi);
+    if dot(wo, h) <= 0.0 {
+        return vec2<f32>(0.0);
+    }
+    let d = ggx_distribution(dot(h, normal), alpha);
+    let f = d * ggx_g2(cos_o, cos_i, alpha) / (4.0 * cos_o * cos_i);
+    return vec2<f32>(f, ggx_pdf(alpha, wo, wi, normal));
+}
+
+// BRDF value (rgb) and pdf (w) for reflecting wo into wi at hit; pdf is zero
+// for delta materials and for directions below the surface.
+fn bsdf_eval(material: Material, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> vec4<f32> {
+    switch material.material_type {
+        case MATERIAL_LAMBERTIAN: {
+            let cos_i = dot(wi, normal);
+            if cos_i <= 0.0 || dot(wo, normal) <= 0.0 {
+                return vec4<f32>(0.0);
+            }
+            return vec4<f32>(material.color.xyz / PI, cos_i / PI);
+        }
+        case MATERIAL_METAL: {
+            if material.fuzz < GGX_MIN_ALPHA {
+                return vec4<f32>(0.0);
+            }
+            let e = ggx_eval(material.fuzz, wo, wi, normal);
+            return vec4<f32>(material.color.xyz * e.x, e.y);
+        }
+        default: {
+            return vec4<f32>(0.0);
+        }
+    }
+}
+
+// ============================================================================
 // Material Scattering
 // ============================================================================
 
@@ -426,7 +521,7 @@ fn schlick(cosine: f32, ref_idx: f32) -> f32 {
 fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>) -> ScatterResult {
     var result: ScatterResult;
     result.valid = false;
-    result.diffuse = false;
+    result.non_delta = false;
     result.pdf = 0.0;
 
     // Offset origin along normal to prevent self-intersection
@@ -439,17 +534,37 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>) -> Scatte
             result.ray = Ray(offset_origin, direction);
             result.attenuation = material.color.xyz;
             result.pdf = max(dot(direction, hit.normal), 0.0) / PI;
-            result.diffuse = true;
+            result.non_delta = true;
             result.valid = true;
         }
         case MATERIAL_METAL: {
-            // Specular reflection with fuzz
-            let reflected = reflect(normalize(ray.direction), hit.normal);
-            let scattered_dir = reflected + material.fuzz * random_in_unit_ball(u);
-            if dot(scattered_dir, hit.normal) > 0.0 {
-                result.ray = Ray(offset_origin, scattered_dir);
-                result.attenuation = material.color.xyz;
-                result.valid = true;
+            // fuzz is the GGX roughness; below GGX_MIN_ALPHA it is a mirror
+            let wo = -normalize(ray.direction);
+            if material.fuzz < GGX_MIN_ALPHA {
+                let reflected = reflect(-wo, hit.normal);
+                if dot(reflected, hit.normal) > 0.0 {
+                    result.ray = Ray(offset_origin, reflected);
+                    result.attenuation = material.color.xyz;
+                    result.valid = true;
+                }
+            } else {
+                let cos_o = dot(wo, hit.normal);
+                if cos_o > 0.0 {
+                    let onb = build_onb(hit.normal);
+                    let wo_local = vec3<f32>(dot(wo, onb[0]), dot(wo, onb[1]), cos_o);
+                    let h = onb * ggx_sample_visible_normal(wo_local, material.fuzz, u.x, u.y);
+                    let wi = h * (2.0 * dot(wo, h)) - wo;
+                    let cos_i = dot(wi, hit.normal);
+                    let e = ggx_eval(material.fuzz, wo, wi, hit.normal);
+                    if cos_i > 0.0 && e.y > 0.0 {
+                        result.ray = Ray(offset_origin, wi);
+                        // f * cos / pdf, which for visible-normal sampling is G2 / G1
+                        result.attenuation = material.color.xyz * (e.x * cos_i / e.y);
+                        result.pdf = e.y;
+                        result.non_delta = true;
+                        result.valid = true;
+                    }
+                }
             }
         }
         case MATERIAL_DIELECTRIC: {
@@ -615,9 +730,10 @@ fn light_select_pdf(shape_idx: u32) -> f32 {
     return 0.0;
 }
 
-// Direct lighting at a Lambertian vertex from one light chosen in proportion
-// to its power, weighted against BSDF sampling unless full_weight is set.
-fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_light: vec2<f32>, u_select: f32) -> vec3<f32> {
+// Direct lighting at a non-delta vertex seen from wo, from one light chosen
+// in proportion to its power, weighted against BSDF sampling unless
+// full_weight is set.
+fn sample_direct_light(hit: HitRecord, material: Material, wo: vec3<f32>, full_weight: bool, u_light: vec2<f32>, u_select: f32) -> vec3<f32> {
     var light_index = params.num_lights - 1u;
     for (var i = 0u; i < params.num_lights; i = i + 1u) {
         if u_select < lights[i].cdf {
@@ -633,7 +749,8 @@ fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_l
         return vec3<f32>(0.0);
     }
     let cos_theta = dot(ls.direction, hit.normal);
-    if cos_theta <= 0.0 {
+    let bsdf = bsdf_eval(material, wo, ls.direction, hit.normal);
+    if bsdf.w <= 0.0 {
         return vec3<f32>(0.0);
     }
 
@@ -645,14 +762,12 @@ fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_l
 
     let emitted = materials[shadow_hit.material_idx].color.xyz;
     let pdf_light = ls.pdf * light.select_pdf;
-    let pdf_bsdf = cos_theta / PI;
     var weight = 1.0;
     if !full_weight {
-        weight = power_heuristic(pdf_light, pdf_bsdf);
+        weight = power_heuristic(pdf_light, bsdf.w);
     }
 
-    // f * cos / pdf with f = albedo / PI
-    return albedo * emitted * (cos_theta / (PI * pdf_light) * weight);
+    return bsdf.xyz * emitted * (cos_theta / pdf_light * weight);
 }
 
 // ============================================================================
@@ -711,16 +826,17 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
             break;
         }
 
-        if use_nee && scattered.diffuse {
+        if use_nee && scattered.non_delta {
             // At the last allowed interaction there is no BSDF-sampled
             // continuation to share the light with.
             let last_vertex = depth + 1u >= params.max_depth;
+            let wo = -normalize(ray.direction);
             let u_light = sample_2d(slot + 1u);
             if !have_scalar {
                 u_scalar = sample_2d(slot + 2u);
                 have_scalar = true;
             }
-            color = color + throughput * sample_direct_light(hit, scattered.attenuation, last_vertex, u_light, u_scalar.x);
+            color = color + throughput * sample_direct_light(hit, material, wo, last_vertex, u_light, u_scalar.x);
             prev_specular = false;
             prev_pdf = scattered.pdf;
         } else {
