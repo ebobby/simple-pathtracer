@@ -4,3 +4,4 @@ mod parity;
 mod bvh;
 mod sampling;
 mod nee;
+mod sampler;

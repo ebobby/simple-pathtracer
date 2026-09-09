@@ -1,7 +1,6 @@
-use super::{Scatterable, Scattered};
+use super::{ScatterUniforms, Scatterable, Scattered};
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
-use crate::rng;
 use crate::Color;
 use crate::Texture;
 use crate::Vec3;
@@ -23,7 +22,12 @@ impl Scatterable for Dielectric {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &Intersection,
+        uniforms: ScatterUniforms,
+    ) -> Option<Scattered> {
         let ref_idx = self.refractive_index;
         let attenuation = self
             .attenuation
@@ -53,7 +57,7 @@ impl Scatterable for Dielectric {
                 (Vec3::zero(), 1.0)
             };
 
-        let scattered = if rng::get_random_number() < reflect_probability {
+        let scattered = if uniforms[2] < reflect_probability {
             Ray {
                 origin: intersection.p,
                 direction: reflected,

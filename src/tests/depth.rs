@@ -3,7 +3,7 @@
 use crate::radiance;
 use crate::ray::Ray;
 use crate::shape::Sphere;
-use crate::{Camera, Color, Hitable, Material, Scene, Texture, Vec3, BVH};
+use crate::{Camera, Color, Hitable, Material, Sampler, Scene, Texture, Vec3, BVH};
 
 /// A perfect mirror in front of the camera, and a light behind it.
 /// A ray towards the mirror needs two surface interactions to see the light.
@@ -35,13 +35,13 @@ fn towards_mirror() -> Ray {
 #[test]
 fn max_depth_one_stops_at_first_surface() {
     let scene = mirror_facing_light();
-    let c = radiance(&scene, &towards_mirror(), 1, 1);
+    let c = radiance(&scene, &towards_mirror(), 1, 1, &Sampler::new(1, 0));
     assert_eq!((c.r, c.g, c.b), (0.0, 0.0, 0.0));
 }
 
 #[test]
 fn max_depth_two_reaches_light_through_mirror() {
     let scene = mirror_facing_light();
-    let c = radiance(&scene, &towards_mirror(), 1, 2);
+    let c = radiance(&scene, &towards_mirror(), 1, 2, &Sampler::new(1, 0));
     assert!((c.r - 2.0).abs() < 1e-9 && (c.g - 3.0).abs() < 1e-9 && (c.b - 4.0).abs() < 1e-9, "{c:?}");
 }

@@ -1,4 +1,4 @@
-use super::{Scatterable, Scattered};
+use super::{ScatterUniforms, Scatterable, Scattered};
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::Color;
@@ -15,7 +15,12 @@ impl Scatterable for DiffuseLight {
         self.texture.value(u, v, p)
     }
 
-    fn scatter(&self, _ray: &Ray, _intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(
+        &self,
+        _ray: &Ray,
+        _intersection: &Intersection,
+        _uniforms: ScatterUniforms,
+    ) -> Option<Scattered> {
         None
     }
 }

@@ -1,6 +1,5 @@
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
-use crate::rng;
 use crate::Color;
 use crate::Texture;
 use crate::Vec3;
@@ -39,9 +38,18 @@ pub struct Scattered {
     pub pdf: Option<f64>,
 }
 
+/// Three uniform random numbers a material may use when scattering:
+/// two for the direction and one for a scalar decision (Fresnel, fuzz).
+pub type ScatterUniforms = [f64; 3];
+
 pub trait Scatterable {
     fn emit(&self, u: f64, v: f64, p: Vec3) -> Color;
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered>;
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &Intersection,
+        uniforms: ScatterUniforms,
+    ) -> Option<Scattered>;
 }
 
 impl Material {
@@ -71,38 +79,35 @@ impl Material {
         }
     }
 
-    pub fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
+    pub fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &Intersection,
+        uniforms: ScatterUniforms,
+    ) -> Option<Scattered> {
         match self {
-            Material::Lambertian(lambertian) => lambertian.scatter(ray, intersection),
-            Material::Metal(metal) => metal.scatter(ray, intersection),
-            Material::Dielectric(dielectric) => dielectric.scatter(ray, intersection),
-            Material::DiffuseLight(diffuse_light) => diffuse_light.scatter(ray, intersection),
+            Material::Lambertian(lambertian) => lambertian.scatter(ray, intersection, uniforms),
+            Material::Metal(metal) => metal.scatter(ray, intersection, uniforms),
+            Material::Dielectric(dielectric) => dielectric.scatter(ray, intersection, uniforms),
+            Material::DiffuseLight(light) => light.scatter(ray, intersection, uniforms),
         }
     }
 }
 
-/// Generate a random point inside a unit sphere using rejection sampling.
-/// This is faster than the spherical coordinate approach as it avoids
-/// expensive acos() and cbrt() calls.
+/// Uniformly distributed point inside the unit ball from three uniforms.
 #[inline]
-fn random_in_unit_sphere() -> Vec3 {
-    loop {
-        let x = 2.0 * rng::get_random_number() - 1.0;
-        let y = 2.0 * rng::get_random_number() - 1.0;
-        let z = 2.0 * rng::get_random_number() - 1.0;
-        if x * x + y * y + z * z <= 1.0 {
-            return Vec3::new(x, y, z);
-        }
-    }
+fn random_in_unit_ball(u1: f64, u2: f64, u3: f64) -> Vec3 {
+    let z = 1.0 - 2.0 * u1;
+    let r = (1.0 - z * z).max(0.0).sqrt();
+    let phi = 2.0 * std::f64::consts::PI * u2;
+    let radius = u3.cbrt();
+    Vec3::new(r * phi.cos(), r * phi.sin(), z) * radius
 }
 
-/// Cosine-weighted direction on the hemisphere around the unit `normal`.
-/// Uses the same orthonormal basis construction as the GPU shader.
+/// Cosine-weighted direction on the hemisphere around the unit `normal`,
+/// from two uniforms. Uses the same orthonormal basis as the GPU shader.
 #[inline]
-pub(crate) fn random_cosine_direction(normal: Vec3) -> Vec3 {
-    let r1 = rng::get_random_number();
-    let r2 = rng::get_random_number();
-
+pub(crate) fn random_cosine_direction(normal: Vec3, r1: f64, r2: f64) -> Vec3 {
     let phi = 2.0 * std::f64::consts::PI * r1;
     let sqrt_r2 = r2.sqrt();
 

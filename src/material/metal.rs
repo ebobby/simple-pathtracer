@@ -1,4 +1,4 @@
-use super::{Scatterable, Scattered};
+use super::{ScatterUniforms, Scatterable, Scattered};
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::Color;
@@ -16,12 +16,18 @@ impl Scatterable for Metal {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
+    fn scatter(
+        &self,
+        ray: &Ray,
+        intersection: &Intersection,
+        uniforms: ScatterUniforms,
+    ) -> Option<Scattered> {
         let reflected = super::reflect(ray.direction.normalize(), intersection.normal);
+        let fuzz = super::random_in_unit_ball(uniforms[0], uniforms[1], uniforms[2]);
 
         let scattered = Ray {
             origin: intersection.p,
-            direction: reflected + (self.fuzz * super::random_in_unit_sphere()),
+            direction: reflected + (self.fuzz * fuzz),
         };
 
         if scattered.direction.dot(intersection.normal) > 0.0 {

@@ -269,6 +269,9 @@ pub struct GPURenderParams {
     pub num_spheres: u32,
     pub num_discs: u32,
     pub num_lights: u32,
+    /// Index of the first sample of this dispatch in each pixel's sequence.
+    pub sample_offset: u32,
+    pub _pad: [u32; 3],
 }
 
 impl GPURenderParams {
@@ -290,6 +293,8 @@ impl GPURenderParams {
             num_spheres,
             num_discs,
             num_lights,
+            sample_offset: 0,
+            _pad: [0; 3],
         }
     }
 }

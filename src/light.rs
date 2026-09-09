@@ -1,7 +1,6 @@
 //! Emissive shapes and how to sample directions towards them.
 
 use crate::Vec3;
-use crate::rng;
 
 use std::f64::consts::PI;
 
@@ -31,11 +30,10 @@ pub struct LightSample {
 }
 
 impl Light {
-    /// Sample a direction from `p` towards this light. Returns `None` when the
-    /// sample carries no energy (e.g. a disc seen edge-on).
-    pub fn sample(&self, p: Vec3) -> Option<LightSample> {
-        let u1 = rng::get_random_number();
-        let u2 = rng::get_random_number();
+    /// Sample a direction from `p` towards this light using two uniforms.
+    /// Returns `None` when the sample carries no energy (e.g. a disc seen
+    /// edge-on).
+    pub fn sample(&self, p: Vec3, u1: f64, u2: f64) -> Option<LightSample> {
 
         match self.shape {
             LightShape::Disc { center, normal, radius } => {

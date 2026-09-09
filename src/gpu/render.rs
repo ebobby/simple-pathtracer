@@ -277,6 +277,8 @@ pub fn render_gpu_linear(
             num_spheres: scene.num_spheres,
             num_discs: scene.num_discs,
             num_lights: scene.lights.len() as u32,
+            sample_offset: pass * samples_per_pass,
+            _pad: [0; 3],
         };
         ctx.queue.write_buffer(&params_buffer, 0, bytemuck::cast_slice(&[params]));
 

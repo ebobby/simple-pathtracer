@@ -4,7 +4,7 @@ use crate::light::{Light, LightShape};
 use crate::ray::Ray;
 use crate::shape::{Disc, Sphere};
 use crate::{radiance_with, render_linear_with, Integrator};
-use crate::{Camera, Color, Hitable, Material, Scene, Texture, Vec3, BVH};
+use crate::{Camera, Color, Hitable, Material, Sampler, Scene, Texture, Vec3, BVH};
 
 fn grey(albedo: f64) -> Material {
     Material::lambertian(Texture::constant_color(Color::new(albedo, albedo, albedo)))
@@ -48,8 +48,9 @@ fn direct_light_from_disc_matches_analytic_irradiance() {
     };
     let n = 20_000;
     let mut sum = 0.0;
-    for _ in 0..n {
-        sum += radiance_with(&scene, &ray, 1, 1, Integrator::NextEventEstimation).r;
+    for i in 0..n {
+        let sampler = Sampler::new(99, i);
+        sum += radiance_with(&scene, &ray, 1, 1, Integrator::NextEventEstimation, &sampler).r;
     }
     let mean = sum / n as f64;
     assert!(
@@ -137,8 +138,9 @@ fn light_sample_pdf_matches_pdf_evaluation() {
     ];
     let p = Vec3::new(0.3, 0.0, 0.1);
     for light in &lights {
-        for _ in 0..100 {
-            let sample = light.sample(p).expect("light should be sampleable");
+        for i in 0..100 {
+            let (u1, u2) = Sampler::new(5, i).get_2d(0);
+            let sample = light.sample(p, u1, u2).expect("light should be sampleable");
             assert!((sample.direction.length() - 1.0).abs() < 1e-9);
             let pdf = light.pdf(p, sample.point, sample.direction);
             assert!(
@@ -157,6 +159,6 @@ fn point_inside_sphere_light_samples_full_sphere() {
         shape_id: 0,
         shape: LightShape::Sphere { center: Vec3::zero(), radius: 10.0 },
     };
-    let sample = light.sample(Vec3::new(1.0, 2.0, 3.0)).unwrap();
+    let sample = light.sample(Vec3::new(1.0, 2.0, 3.0), 0.3, 0.6).unwrap();
     assert!((sample.pdf - 1.0 / (4.0 * std::f64::consts::PI)).abs() < 1e-12);
 }

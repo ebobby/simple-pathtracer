@@ -783,6 +783,8 @@ impl RealtimeApp {
             num_spheres: scene.num_spheres,
             num_discs: scene.num_discs,
             num_lights: scene.lights.len() as u32,
+            sample_offset: if self.reset_accumulation { 0 } else { self.sample_count },
+            _pad: [0; 3],
         };
         queue.write_buffer(
             self.params_buffer.as_ref().unwrap(),

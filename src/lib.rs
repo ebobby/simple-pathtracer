@@ -9,6 +9,7 @@ mod light;
 mod material;
 mod ray;
 mod rng;
+mod sampler;
 mod scene;
 mod texture;
 mod vector;
@@ -28,6 +29,7 @@ pub use gpu::GPUShape;
 pub use gpu_types::*;
 pub use light::{Light, LightShape};
 pub use material::Material;
+pub use sampler::Sampler;
 pub use scene::Scene;
 pub use texture::Texture;
 pub use vector::Vec3;
@@ -202,20 +204,25 @@ pub fn render_linear_with(
                 for y in y_start..y_end {
                     for x in x_start..x_end {
                         let mut pixel_color = Color::new(0.0, 0.0, 0.0);
+                        let pixel_seed = sampler::hash(y * width + x);
 
                         for sy in 0..2 {
                             for sx in 0..2 {
-                                for _i in 0..samples {
-                                    let dx = tent_filter_factor();
-                                    let dy = tent_filter_factor();
+                                for i in 0..samples {
+                                    let sampler =
+                                        Sampler::new(pixel_seed, (sy * 2 + sx) * samples + i);
+                                    let (jx, jy) = sampler.get_2d(sampler::SLOT_PIXEL);
+                                    let dx = tent_filter_factor(jx);
+                                    let dy = tent_filter_factor(jy);
 
                                     let u = ((f64::from(sx) + 0.5 + dx) * 0.5 + f64::from(x)) * w;
                                     let v = ((f64::from(sy) + 0.5 + dy) * 0.5 + f64::from(y)) * h;
 
                                     let ray = scene.camera.get_ray(u, v);
 
-                                    pixel_color +=
-                                        radiance_with(scene, &ray, 1, max_depth, integrator);
+                                    pixel_color += radiance_with(
+                                        scene, &ray, 1, max_depth, integrator, &sampler,
+                                    );
                                 }
                             }
                         }
@@ -256,17 +263,19 @@ pub fn render_linear_with(
 ///
 /// `depth` is the number of the surface interaction the ray is about to
 /// have (1 for camera rays); the walk stops after `max_depth` interactions.
-fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
-    radiance_with(scene, ray, depth, max_depth, Integrator::NextEventEstimation)
+fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32, sampler: &Sampler) -> Color {
+    radiance_with(scene, ray, depth, max_depth, Integrator::NextEventEstimation, sampler)
 }
 
-/// [`radiance`] with an explicit choice of estimator.
+/// [`radiance`] with an explicit choice of estimator. Random decisions come
+/// from `sampler`; bounce `b` (0-based) uses pair slots `bounce_slot(b)..+3`.
 fn radiance_with(
     scene: &Scene,
     ray: &Ray,
     depth: u32,
     max_depth: u32,
     integrator: Integrator,
+    sampler: &Sampler,
 ) -> Color {
     let lights = scene.world.lights();
     let use_nee = integrator == Integrator::NextEventEstimation && !lights.is_empty();
@@ -307,7 +316,23 @@ fn radiance_with(
             color += throughput * emitted * weight;
         }
 
-        let Some(scattered) = intersection.material.scatter(&ray, &intersection) else {
+        // Sample slots for this bounce: BSDF direction, light sample, and
+        // (light selection or Fresnel, Russian roulette). The scalar slot is
+        // only generated when something consumes it.
+        let slot = sampler::bounce_slot(depth - 1);
+        let u_bsdf = sampler.get_2d(slot);
+        let needs_scalar = matches!(intersection.material, Material::Dielectric(_));
+        let mut u_scalar = if needs_scalar {
+            Some(sampler.get_2d(slot + 2))
+        } else {
+            None
+        };
+
+        let Some(scattered) = intersection.material.scatter(
+            &ray,
+            &intersection,
+            [u_bsdf.0, u_bsdf.1, u_scalar.map_or(0.0, |u| u.0)],
+        ) else {
             break;
         };
 
@@ -317,8 +342,17 @@ fn radiance_with(
                 // continuation to share the light with, so the light sample
                 // takes full weight.
                 let last_vertex = depth >= max_depth;
+                let u_light = sampler.get_2d(slot + 1);
+                let u_select = *u_scalar.get_or_insert_with(|| sampler.get_2d(slot + 2));
                 color += throughput
-                    * sample_direct_light(scene, &intersection, scattered.attenuation, last_vertex);
+                    * sample_direct_light(
+                        scene,
+                        &intersection,
+                        scattered.attenuation,
+                        last_vertex,
+                        u_light,
+                        u_select.0,
+                    );
                 prev_specular = false;
                 prev_pdf = pdf;
             }
@@ -333,7 +367,8 @@ fn radiance_with(
         // probability proportional to how little light they still carry.
         if depth > 5 {
             let p = (attenuation.r + attenuation.g + attenuation.b) / 3.0;
-            if rng::get_random_number() < p {
+            let u_roulette = u_scalar.get_or_insert_with(|| sampler.get_2d(slot + 2)).1;
+            if u_roulette < p {
                 attenuation = attenuation / p;
             } else {
                 break;
@@ -360,12 +395,14 @@ fn sample_direct_light(
     intersection: &Intersection,
     albedo: Color,
     full_weight: bool,
+    u_light: (f64, f64),
+    u_select: f64,
 ) -> Color {
     let lights = scene.world.lights();
-    let light_index = ((rng::get_random_number() * lights.len() as f64) as usize).min(lights.len() - 1);
+    let light_index = ((u_select * lights.len() as f64) as usize).min(lights.len() - 1);
     let light = &lights[light_index];
 
-    let Some(sample) = light.sample(intersection.p) else {
+    let Some(sample) = light.sample(intersection.p, u_light.0, u_light.1) else {
         return Color::new(0.0, 0.0, 0.0);
     };
     let cos_theta = sample.direction.dot(intersection.normal);
@@ -397,8 +434,9 @@ fn sample_direct_light(
     albedo * emitted * (cos_theta / (std::f64::consts::PI * pdf_light) * weight)
 }
 
-fn tent_filter_factor() -> f64 {
-    let r = 2.0 * rng::get_random_number();
+/// Map a uniform in [0, 1) to a tent-distributed offset in (-1, 1).
+fn tent_filter_factor(u: f64) -> f64 {
+    let r = 2.0 * u;
 
     if r < 1.0 {
         r.sqrt() - 1.0

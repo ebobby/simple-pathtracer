@@ -1,4 +1,4 @@
-use super::{Scatterable, Scattered};
+use super::{ScatterUniforms, Scatterable, Scattered};
 use crate::intersectable::Intersection;
 use crate::ray::Ray;
 use crate::Color;
@@ -15,8 +15,14 @@ impl Scatterable for Lambertian {
         Color::new(0.0, 0.0, 0.0)
     }
 
-    fn scatter(&self, _ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
-        let direction = super::random_cosine_direction(intersection.normal);
+    fn scatter(
+        &self,
+        _ray: &Ray,
+        intersection: &Intersection,
+        uniforms: ScatterUniforms,
+    ) -> Option<Scattered> {
+        let direction =
+            super::random_cosine_direction(intersection.normal, uniforms[0], uniforms[1]);
         let pdf = direction.dot(intersection.normal).max(0.0) / std::f64::consts::PI;
 
         let scattered = Ray {

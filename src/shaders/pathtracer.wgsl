@@ -14,6 +14,10 @@ struct RenderParams {
     num_spheres: u32,
     num_discs: u32,
     num_lights: u32,
+    sample_offset: u32, // index of this dispatch's first sample per pixel
+    _pad0: u32,
+    _pad1: u32,
+    _pad2: u32,
 }
 
 struct Camera {
@@ -110,51 +114,80 @@ const PI: f32 = 3.14159265359;
 @group(0) @binding(7) var<storage, read> lights: array<u32>; // shape indices
 
 // ============================================================================
-// Random Number Generation (PCG-based for speed)
+// Sampling: padded 2D Sobol with hash-based Owen scrambling
+// (mirrors src/sampler.rs)
 // ============================================================================
 
-var<private> rng_state: u32;
-
-// Fast hash for seed initialization
-fn hash(x: u32) -> u32 {
-    var v = x;
-    v = v ^ (v >> 16u);
-    v = v * 0x7feb352du;
-    v = v ^ (v >> 15u);
-    v = v * 0x846ca68bu;
-    v = v ^ (v >> 16u);
-    return v;
+fn hash(x_in: u32) -> u32 {
+    var x = x_in;
+    x = x ^ (x >> 16u);
+    x = x * 0x7feb352du;
+    x = x ^ (x >> 15u);
+    x = x * 0x846ca68bu;
+    x = x ^ (x >> 16u);
+    return x;
 }
 
-fn init_rng(pixel: vec2<u32>, frame: u32) {
-    // Create unique seed per pixel and frame using hash
-    let seed = pixel.x + pixel.y * params.width + frame * params.width * params.height;
-    rng_state = hash(seed);
-    // Warm up the RNG
-    rng_state = rng_state * 747796405u + 2891336453u;
-    rng_state = rng_state * 747796405u + 2891336453u;
+fn hash_combine(seed: u32, value: u32) -> u32 {
+    return hash(seed ^ (value * 0x9e3779b9u));
 }
 
-fn random() -> f32 {
-    // PCG-XSH-RR: fast and good quality
-    rng_state = rng_state * 747796405u + 2891336453u;
-    let word = ((rng_state >> ((rng_state >> 28u) + 4u)) ^ rng_state) * 277803737u;
-    let result = (word >> 22u) ^ word;
-    return f32(result) / 4294967295.0;
+// First dimension: bit-reversed index. Second dimension: Pascal-matrix
+// (mod 2) product, computed as the Sierpinski butterfly of the reversed index.
+fn sobol_2d(index: u32) -> vec2<u32> {
+    let x = reverseBits(index);
+    var y = x;
+    y = y ^ ((y & 0x55555555u) << 1u);
+    y = y ^ ((y & 0x33333333u) << 2u);
+    y = y ^ ((y & 0x0f0f0f0fu) << 4u);
+    y = y ^ ((y & 0x00ff00ffu) << 8u);
+    y = y ^ ((y & 0x0000ffffu) << 16u);
+    return vec2<u32>(x, y);
 }
 
-fn random_in_unit_sphere() -> vec3<f32> {
-    // Rejection sampling (kept for metal fuzz)
-    loop {
-        let x = 2.0 * random() - 1.0;
-        let y = 2.0 * random() - 1.0;
-        let z = 2.0 * random() - 1.0;
-        let p = vec3<f32>(x, y, z);
-        if dot(p, p) <= 1.0 {
-            return p;
-        }
-    }
-    return vec3<f32>(0.0, 0.0, 0.0); // unreachable
+// Every step is a bijection whose output bits depend only on input bits at
+// or below them (even multipliers), which makes the scramble an Owen scramble.
+fn laine_karras_permutation(x_in: u32, seed: u32) -> u32 {
+    var x = x_in + seed;
+    x = x ^ (x * 0x6c50b47cu);
+    x = x ^ (x * 0xb82f1e52u);
+    x = x ^ (x * 0xc7afe784u);
+    x = x ^ (x * 0x8d22f6e6u);
+    return x;
+}
+
+fn nested_uniform_scramble(x: u32, seed: u32) -> u32 {
+    return reverseBits(laine_karras_permutation(reverseBits(x), seed));
+}
+
+var<private> sampler_pixel_seed: u32;
+var<private> sampler_index: u32;
+
+// The 2D sample for pair `slot` of the current path, both in [0, 1).
+fn sample_2d(slot: u32) -> vec2<f32> {
+    // Independent seeds for the shuffle and the two scrambles (see sampler.rs)
+    let seed = hash_combine(sampler_pixel_seed, slot);
+    let index = nested_uniform_scramble(sampler_index, hash_combine(seed, 0u));
+    let p = sobol_2d(index);
+    let x = nested_uniform_scramble(p.x, hash_combine(seed, 1u));
+    let y = nested_uniform_scramble(p.y, hash_combine(seed, 2u));
+    return vec2<f32>(f32(x >> 8u), f32(y >> 8u)) / 16777216.0;
+}
+
+const SLOT_PIXEL: u32 = 0u;
+
+// First slot of a bounce: BSDF direction, light sample, then
+// (light selection / fuzz radius / Fresnel, Russian roulette).
+fn bounce_slot(bounce: u32) -> u32 {
+    return 1u + 3u * bounce;
+}
+
+// Uniformly distributed point inside the unit ball from three uniforms.
+fn random_in_unit_ball(u: vec3<f32>) -> vec3<f32> {
+    let z = 1.0 - 2.0 * u.x;
+    let r = sqrt(max(1.0 - z * z, 0.0));
+    let phi = 2.0 * PI * u.y;
+    return vec3<f32>(r * cos(phi), r * sin(phi), z) * pow(u.z, 1.0 / 3.0);
 }
 
 // Build orthonormal basis from normal (Duff et al. 2017)
@@ -167,11 +200,8 @@ fn build_onb(n: vec3<f32>) -> mat3x3<f32> {
     return mat3x3<f32>(t, bt, n);
 }
 
-// Cosine-weighted hemisphere sampling
-fn random_cosine_direction(normal: vec3<f32>) -> vec3<f32> {
-    let r1 = random();
-    let r2 = random();
-
+// Cosine-weighted hemisphere sampling from two uniforms
+fn random_cosine_direction(normal: vec3<f32>, r1: f32, r2: f32) -> vec3<f32> {
     let phi = 2.0 * PI * r1;
     let sqrt_r2 = sqrt(r2);
 
@@ -185,23 +215,15 @@ fn random_cosine_direction(normal: vec3<f32>) -> vec3<f32> {
     return onb * vec3<f32>(x, y, z);
 }
 
-fn tent_filter() -> f32 {
-    let r = 2.0 * random();
-    if r < 1.0 {
-        return sqrt(r) - 1.0;
-    } else {
-        return 1.0 - sqrt(2.0 - r);
-    }
-}
-
 // ============================================================================
 // Ray Generation
 // ============================================================================
 
 fn generate_ray(pixel: vec2<u32>) -> Ray {
-    // Simple random jitter within pixel
-    let u = (f32(pixel.x) + random()) / f32(params.width);
-    let v = (f32(pixel.y) + random()) / f32(params.height);
+    // Stratified jitter within the pixel
+    let jitter = sample_2d(SLOT_PIXEL);
+    let u = (f32(pixel.x) + jitter.x) / f32(params.width);
+    let v = (f32(pixel.y) + jitter.y) / f32(params.height);
 
     let origin = camera.origin.xyz;
     let direction = camera.corner.xyz + camera.horizontal.xyz * u + camera.vertical.xyz * v - origin;
@@ -393,7 +415,8 @@ fn schlick(cosine: f32, ref_idx: f32) -> f32 {
     return r0 + (1.0 - r0) * pow(1.0 - cosine, 5.0);
 }
 
-fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
+// u: two uniforms for the direction and one for a scalar decision
+fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>) -> ScatterResult {
     var result: ScatterResult;
     result.valid = false;
     result.diffuse = false;
@@ -405,7 +428,7 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
     switch material.material_type {
         case MATERIAL_LAMBERTIAN: {
             // Cosine-weighted diffuse scattering (matches CPU implementation)
-            let direction = random_cosine_direction(hit.normal);
+            let direction = random_cosine_direction(hit.normal, u.x, u.y);
             result.ray = Ray(offset_origin, direction);
             result.attenuation = material.color.xyz;
             result.pdf = max(dot(direction, hit.normal), 0.0) / PI;
@@ -415,7 +438,7 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
         case MATERIAL_METAL: {
             // Specular reflection with fuzz
             let reflected = reflect(normalize(ray.direction), hit.normal);
-            let scattered_dir = reflected + material.fuzz * random_in_unit_sphere();
+            let scattered_dir = reflected + material.fuzz * random_in_unit_ball(u);
             if dot(scattered_dir, hit.normal) > 0.0 {
                 result.ray = Ray(offset_origin, scattered_dir);
                 result.attenuation = material.color.xyz;
@@ -449,7 +472,7 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
             let cannot_refract = ni_over_nt * sin_theta > 1.0;
 
             var direction: vec3<f32>;
-            if cannot_refract || schlick(cosine, material.ior) > random() {
+            if cannot_refract || schlick(cosine, material.ior) > u.z {
                 // Reflection - offset away from surface (along outward_normal)
                 direction = reflect(unit_direction, outward_normal);
                 result.ray = Ray(hit.p + outward_normal * 0.001, direction);
@@ -486,12 +509,10 @@ fn power_heuristic(pdf_a: f32, pdf_b: f32) -> f32 {
 }
 
 // Sample a direction from p towards the light with the given shape index.
-fn light_sample(shape_idx: u32, p: vec3<f32>) -> LightSample {
+fn light_sample(shape_idx: u32, p: vec3<f32>, u1: f32, u2: f32) -> LightSample {
     var s: LightSample;
     s.valid = false;
 
-    let u1 = random();
-    let u2 = random();
     let phi = 2.0 * PI * u2;
 
     if shape_idx < params.num_spheres {
@@ -579,11 +600,11 @@ fn light_pdf(shape_idx: u32, p: vec3<f32>, point: vec3<f32>, direction: vec3<f32
 
 // Direct lighting at a Lambertian vertex from one uniformly chosen light,
 // weighted against BSDF sampling unless full_weight is set.
-fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool) -> vec3<f32> {
-    let light_index = min(u32(random() * f32(params.num_lights)), params.num_lights - 1u);
+fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_light: vec2<f32>, u_select: f32) -> vec3<f32> {
+    let light_index = min(u32(u_select * f32(params.num_lights)), params.num_lights - 1u);
     let light_shape = lights[light_index];
 
-    let ls = light_sample(light_shape, hit.p);
+    let ls = light_sample(light_shape, hit.p, u_light.x, u_light.y);
     if !ls.valid {
         return vec3<f32>(0.0);
     }
@@ -649,8 +670,19 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
             break;
         }
 
+        // Sample slots for this bounce; the scalar slot is generated only
+        // when something consumes it.
+        let slot = bounce_slot(depth);
+        let u_bsdf = sample_2d(slot);
+        var u_scalar = vec2<f32>(0.0);
+        var have_scalar = false;
+        if material.material_type == MATERIAL_DIELECTRIC {
+            u_scalar = sample_2d(slot + 2u);
+            have_scalar = true;
+        }
+
         // Scatter ray
-        let scattered = scatter(ray, hit, material);
+        let scattered = scatter(ray, hit, material, vec3<f32>(u_bsdf, u_scalar.x));
         if !scattered.valid {
             break;
         }
@@ -659,7 +691,12 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
             // At the last allowed interaction there is no BSDF-sampled
             // continuation to share the light with.
             let last_vertex = depth + 1u >= params.max_depth;
-            color = color + throughput * sample_direct_light(hit, scattered.attenuation, last_vertex);
+            let u_light = sample_2d(slot + 1u);
+            if !have_scalar {
+                u_scalar = sample_2d(slot + 2u);
+                have_scalar = true;
+            }
+            color = color + throughput * sample_direct_light(hit, scattered.attenuation, last_vertex, u_light, u_scalar.x);
             prev_specular = false;
             prev_pdf = scattered.pdf;
         } else {
@@ -672,7 +709,11 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
         // Russian roulette after depth 5
         if depth > 5u {
             let p = max(throughput.r, max(throughput.g, throughput.b));
-            if random() > p {
+            if !have_scalar {
+                u_scalar = sample_2d(slot + 2u);
+                have_scalar = true;
+            }
+            if u_scalar.y > p {
                 break;
             }
             throughput = throughput / p;
@@ -695,14 +736,14 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    // Initialize RNG for this pixel (frame_seed varies per pass for different random sequences)
-    init_rng(pixel, params.frame_seed);
+    sampler_pixel_seed = hash(pixel.y * params.width + pixel.x);
 
     var color = vec3<f32>(0.0);
 
-    // Render samples for this pass
+    // Render samples for this pass, continuing each pixel's sample sequence
     let samples_this_pass = params.samples;
     for (var s: u32 = 0u; s < samples_this_pass; s = s + 1u) {
+        sampler_index = params.sample_offset + s;
         let ray = generate_ray(pixel);
         color = color + trace_path(ray);
     }
