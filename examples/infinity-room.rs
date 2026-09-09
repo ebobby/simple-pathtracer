@@ -126,10 +126,7 @@ fn build_scene_cpu(spheres: Vec<Sphere>, discs: Vec<Disc>, camera: Camera) -> Sc
     for disc in discs {
         objects.push(Box::new(disc));
     }
-    Scene {
-        camera,
-        world: BVH::from_vec(objects),
-    }
+    Scene::new(camera, BVH::from_vec(objects))
 }
 
 fn main() {

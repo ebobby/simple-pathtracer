@@ -113,10 +113,7 @@ fn cornell_box_cpu(spheres: Vec<Sphere>, discs: Vec<Disc>, camera: Camera) -> Sc
         objects.push(Box::new(sphere));
     }
 
-    Scene {
-        camera,
-        world: BVH::from_vec(objects),
-    }
+    Scene::new(camera, BVH::from_vec(objects))
 }
 
 fn main() {

@@ -1,8 +1,8 @@
 //! The CPU and GPU renderers must converge to the same image.
 
 use crate::shape::{Disc, Sphere};
-use crate::{render_gpu_linear, render_linear};
-use crate::{Camera, Color, GPUShape, Hitable, Material, Scene, Texture, Vec3, BVH};
+use crate::{render_gpu_linear_with_environment, render_linear};
+use crate::{Camera, Color, Environment, GPUShape, Hitable, Material, Scene, Sky, Sun, Texture, Vec3, BVH};
 
 const WIDTH: u32 = 32;
 const HEIGHT: u32 = 24;
@@ -72,6 +72,13 @@ fn camera() -> Camera {
     )
 }
 
+/// A dim blue sky plus a low sun, so misses and shadow rays both matter.
+fn environment() -> Environment {
+    Environment::new()
+        .sky(Sky::Constant(Color::new(0.2, 0.3, 0.5)))
+        .sun(Sun::new(Vec3::new(0.5, 0.6, 0.3), Color::new(40.0, 38.0, 35.0), 0.05))
+}
+
 fn mean(pixels: &[Color]) -> f64 {
     pixels.iter().map(|c| c.r + c.g + c.b).sum::<f64>() / (3.0 * pixels.len() as f64)
 }
@@ -84,8 +91,15 @@ fn cpu_and_gpu_renders_agree() {
         .map(GPUShape::Sphere)
         .chain(discs.into_iter().map(GPUShape::Disc))
         .collect();
-    let Some(gpu) = render_gpu_linear(gpu_shapes, &camera(), WIDTH, HEIGHT, SAMPLES, MAX_DEPTH)
-    else {
+    let Some(gpu) = render_gpu_linear_with_environment(
+        gpu_shapes,
+        &camera(),
+        &environment(),
+        WIDTH,
+        HEIGHT,
+        SAMPLES,
+        MAX_DEPTH,
+    ) else {
         eprintln!("no GPU adapter, skipping parity test");
         return;
     };
@@ -96,10 +110,7 @@ fn cpu_and_gpu_renders_agree() {
         .map(|s| Box::new(s) as Hitable)
         .chain(discs.into_iter().map(|d| Box::new(d) as Hitable))
         .collect();
-    let scene = Scene {
-        camera: camera(),
-        world: BVH::from_vec(objects),
-    };
+    let scene = Scene::new(camera(), BVH::from_vec(objects)).with_environment(environment());
     let cpu = render_linear(&scene, WIDTH, HEIGHT, SAMPLES, MAX_DEPTH, 4);
 
     assert_eq!(cpu.len(), gpu.len());

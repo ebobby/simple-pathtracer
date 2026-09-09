@@ -15,10 +15,16 @@ struct RenderParams {
     num_discs: u32,
     num_lights: u32,
     sample_offset: u32, // index of this dispatch's first sample per pixel
-    _pad0: u32,
-    _pad1: u32,
-    _pad2: u32,
+    sky_type: u32,      // 0 none, 1 constant colour, 2 equirectangular image
+    env_width: u32,
+    env_height: u32,
+    sky_color: vec4<f32>,
+    sun_direction: vec4<f32>, // xyz towards the sun, w = cos of angular radius
+    sun_radiance: vec4<f32>,  // xyz radiance, w = 1 when present
 }
+
+const LIGHT_SKY: u32 = 0xFFFFFFFEu;
+const LIGHT_SUN: u32 = 0xFFFFFFFFu;
 
 struct Camera {
     origin: vec4<f32>,
@@ -126,6 +132,9 @@ const PI: f32 = 3.14159265359;
 @group(0) @binding(5) var<storage, read> materials: array<Material>;
 @group(0) @binding(6) var<storage, read_write> output: array<vec4<f32>>;
 @group(0) @binding(7) var<storage, read> lights: array<Light>;
+@group(0) @binding(8) var<storage, read> env_pixels: array<vec4<f32>>; // rgb + (u,v) pdf
+// Marginal CDF (env_height entries) followed by the conditional CDF rows
+@group(0) @binding(9) var<storage, read> env_cdf: array<f32>;
 
 // ============================================================================
 // Sampling: padded 2D Sobol with hash-based Owen scrambling
@@ -191,7 +200,8 @@ fn sample_2d(slot: u32) -> vec2<f32> {
 const SLOT_PIXEL: u32 = 0u;
 
 // First slot of a bounce: BSDF direction, light sample, then
-// (light selection / fuzz radius / Fresnel, Russian roulette).
+// (light selection / lobe choice / Fresnel, Russian roulette),
+// and a secondary BSDF direction.
 fn bounce_slot(bounce: u32) -> u32 {
     return 1u + 4u * bounce;
 }
@@ -775,6 +785,137 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>, u2: vec2<
 }
 
 // ============================================================================
+// Environment (mirrors src/environment.rs)
+// ============================================================================
+
+fn env_texel(u: f32, v: f32) -> u32 {
+    let x = min(u32(u * f32(params.env_width)), params.env_width - 1u);
+    let y = min(u32(v * f32(params.env_height)), params.env_height - 1u);
+    return y * params.env_width + x;
+}
+
+fn env_direction_to_uv(d: vec3<f32>) -> vec2<f32> {
+    let theta = acos(clamp(d.y, -1.0, 1.0));
+    var phi = atan2(d.z, d.x);
+    if phi < 0.0 {
+        phi = phi + 2.0 * PI;
+    }
+    return vec2<f32>(phi / (2.0 * PI), theta / PI);
+}
+
+fn env_uv_to_direction(u: f32, v: f32) -> vec3<f32> {
+    let theta = PI * v;
+    let phi = 2.0 * PI * u;
+    let sin_theta = sin(theta);
+    return vec3<f32>(sin_theta * cos(phi), cos(theta), sin_theta * sin(phi));
+}
+
+fn sky_radiance(direction: vec3<f32>) -> vec3<f32> {
+    if params.sky_type == 1u {
+        return params.sky_color.xyz;
+    }
+    if params.sky_type == 2u {
+        let uv = env_direction_to_uv(direction);
+        return env_pixels[env_texel(uv.x, uv.y)].xyz;
+    }
+    return vec3<f32>(0.0);
+}
+
+fn sky_pdf(direction: vec3<f32>) -> f32 {
+    if params.sky_type == 1u {
+        return 1.0 / (4.0 * PI);
+    }
+    if params.sky_type == 2u {
+        let uv = env_direction_to_uv(direction);
+        let sin_theta = sin(PI * uv.y);
+        if sin_theta <= 0.0 {
+            return 0.0;
+        }
+        return env_pixels[env_texel(uv.x, uv.y)].w / (2.0 * PI * PI * sin_theta);
+    }
+    return 0.0;
+}
+
+// Importance-sampled sky direction (xyz) and its pdf (w).
+fn sky_sample(u1: f32, u2: f32) -> vec4<f32> {
+    if params.sky_type == 1u {
+        let z = 1.0 - 2.0 * u1;
+        let r = sqrt(max(1.0 - z * z, 0.0));
+        let phi = 2.0 * PI * u2;
+        return vec4<f32>(r * cos(phi), r * sin(phi), z, 1.0 / (4.0 * PI));
+    }
+
+    // Row by the marginal CDF
+    var lo = 0u;
+    var hi = params.env_height - 1u;
+    while lo < hi {
+        let mid = (lo + hi) / 2u;
+        if env_cdf[mid] <= u1 {
+            lo = mid + 1u;
+        } else {
+            hi = mid;
+        }
+    }
+    let y = lo;
+    var row_start = 0.0;
+    if y > 0u {
+        row_start = env_cdf[y - 1u];
+    }
+    let row_span = env_cdf[y] - row_start;
+    var v_in_row = 0.5;
+    if row_span > 0.0 {
+        v_in_row = clamp((u1 - row_start) / row_span, 0.0, 0.999999);
+    }
+
+    // Column by the row's conditional CDF
+    let row_base = y * params.env_width;
+    let cond_base = params.env_height + row_base;
+    lo = 0u;
+    hi = params.env_width - 1u;
+    while lo < hi {
+        let mid = (lo + hi) / 2u;
+        if env_cdf[cond_base + mid] <= u2 {
+            lo = mid + 1u;
+        } else {
+            hi = mid;
+        }
+    }
+    let x = lo;
+    var col_start = 0.0;
+    if x > 0u {
+        col_start = env_cdf[cond_base + x - 1u];
+    }
+    let col_span = env_cdf[cond_base + x] - col_start;
+    var u_in_col = 0.5;
+    if col_span > 0.0 {
+        u_in_col = clamp((u2 - col_start) / col_span, 0.0, 0.999999);
+    }
+
+    let u = (f32(x) + u_in_col) / f32(params.env_width);
+    let v = (f32(y) + v_in_row) / f32(params.env_height);
+    let direction = env_uv_to_direction(u, v);
+    let pdf = env_pixels[row_base + x].w / (2.0 * PI * PI * sin(PI * v));
+    return vec4<f32>(direction, pdf);
+}
+
+fn sun_pdf() -> f32 {
+    return 1.0 / (2.0 * PI * (1.0 - params.sun_direction.w));
+}
+
+fn sun_contains(direction: vec3<f32>) -> bool {
+    return params.sun_radiance.w > 0.0 && dot(direction, params.sun_direction.xyz) >= params.sun_direction.w;
+}
+
+fn sun_sample(u1: f32, u2: f32) -> vec3<f32> {
+    let cos_max = params.sun_direction.w;
+    let cos_theta = 1.0 - u1 * (1.0 - cos_max);
+    let sin_theta = sqrt(max(1.0 - cos_theta * cos_theta, 0.0));
+    let phi = 2.0 * PI * u2;
+    let onb = build_onb(params.sun_direction.xyz);
+    return onb * vec3<f32>(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+}
+
+// ============================================================================
 // Light Sampling (mirrors src/light.rs)
 // ============================================================================
 
@@ -791,6 +932,22 @@ fn power_heuristic(pdf_a: f32, pdf_b: f32) -> f32 {
 fn light_sample(shape_idx: u32, p: vec3<f32>, u1: f32, u2: f32) -> LightSample {
     var s: LightSample;
     s.valid = false;
+
+    if shape_idx == LIGHT_SKY {
+        let sample = sky_sample(u1, u2);
+        s.direction = sample.xyz;
+        s.point = p + s.direction;
+        s.pdf = sample.w;
+        s.valid = sample.w > 0.0;
+        return s;
+    }
+    if shape_idx == LIGHT_SUN {
+        s.direction = sun_sample(u1, u2);
+        s.point = p + s.direction;
+        s.pdf = sun_pdf();
+        s.valid = true;
+        return s;
+    }
 
     let phi = 2.0 * PI * u2;
 
@@ -853,6 +1010,15 @@ fn light_sample(shape_idx: u32, p: vec3<f32>, u1: f32, u2: f32) -> LightSample {
 // Solid-angle pdf that light_sample from p would produce the unit direction
 // that reaches the light at point.
 fn light_pdf(shape_idx: u32, p: vec3<f32>, point: vec3<f32>, direction: vec3<f32>) -> f32 {
+    if shape_idx == LIGHT_SKY {
+        return sky_pdf(direction);
+    }
+    if shape_idx == LIGHT_SUN {
+        if sun_contains(direction) {
+            return sun_pdf();
+        }
+        return 0.0;
+    }
     if shape_idx < params.num_spheres {
         let sphere = spheres[shape_idx];
         let center = sphere.center_radius.xyz;
@@ -914,11 +1080,24 @@ fn sample_direct_light(hit: HitRecord, material: Material, wo: vec3<f32>, full_w
 
     let shadow_ray = Ray(hit.p + n * 0.001, ls.direction);
     let shadow_hit = intersect_bvh(shadow_ray);
-    if !shadow_hit.valid || shadow_hit.shape_idx != light_shape {
-        return vec3<f32>(0.0);
+    var emitted = vec3<f32>(0.0);
+    if light_shape == LIGHT_SKY || light_shape == LIGHT_SUN {
+        // Infinite lights: the shadow ray must leave the scene
+        if shadow_hit.valid {
+            return vec3<f32>(0.0);
+        }
+        if light_shape == LIGHT_SKY {
+            emitted = sky_radiance(ls.direction);
+        } else {
+            emitted = params.sun_radiance.xyz;
+        }
+    } else {
+        // Shape lights: the nearest hit must be that shape
+        if !shadow_hit.valid || shadow_hit.shape_idx != light_shape {
+            return vec3<f32>(0.0);
+        }
+        emitted = materials[shadow_hit.material_idx].emission.xyz;
     }
-
-    let emitted = materials[shadow_hit.material_idx].emission.xyz;
     let pdf_light = ls.pdf * light.select_pdf;
     var weight = 1.0;
     if !full_weight {
@@ -949,7 +1128,23 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
         let hit = intersect_bvh(ray);
 
         if !hit.valid {
-            // Miss - nothing outside the scene emits light (matches CPU)
+            // Left the scene: sky and sun, each MIS-weighted against the
+            // chance that light sampling would have picked this direction.
+            let direction = normalize(ray.direction);
+            if params.sky_type != 0u {
+                var weight = 1.0;
+                if use_nee && !prev_specular {
+                    weight = power_heuristic(prev_pdf, sky_pdf(direction) * light_select_pdf(LIGHT_SKY));
+                }
+                color = color + throughput * sky_radiance(direction) * weight;
+            }
+            if sun_contains(direction) {
+                var weight = 1.0;
+                if use_nee && !prev_specular {
+                    weight = power_heuristic(prev_pdf, sun_pdf() * light_select_pdf(LIGHT_SUN));
+                }
+                color = color + throughput * params.sun_radiance.xyz * weight;
+            }
             break;
         }
 

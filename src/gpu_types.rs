@@ -15,7 +15,7 @@ use crate::Vec3;
 
 /// GPU-compatible 3D vector with padding for 16-byte alignment.
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Copy, Clone, Debug, Default, Pod, Zeroable)]
 pub struct GPUVec3 {
     pub x: f32,
     pub y: f32,
@@ -287,6 +287,66 @@ impl GPULight {
     }
 }
 
+/// Sentinel `shape_idx` values for the infinite lights in the light buffer.
+pub const LIGHT_SKY: u32 = 0xFFFF_FFFE;
+pub const LIGHT_SUN: u32 = 0xFFFF_FFFF;
+
+/// Environment data in GPU form.
+#[derive(Clone, Debug, Default)]
+pub struct GPUEnvironment {
+    pub sky_type: u32,
+    pub sky_color: GPUVec3,
+    pub env_width: u32,
+    pub env_height: u32,
+    /// rgb radiance and the (u, v) pdf of each texel.
+    pub env_pixels: Vec<[f32; 4]>,
+    pub marginal_cdf: Vec<f32>,
+    pub conditional_cdf: Vec<f32>,
+    pub sun_direction: [f32; 4],
+    pub sun_radiance: [f32; 4],
+}
+
+impl From<&crate::Environment> for GPUEnvironment {
+    fn from(env: &crate::Environment) -> Self {
+        let mut out = Self::default();
+        match &env.sky {
+            None => {}
+            Some(crate::Sky::Constant(c)) => {
+                out.sky_type = 1;
+                out.sky_color = (*c).into();
+            }
+            Some(crate::Sky::Image(map)) => {
+                out.sky_type = 2;
+                out.env_width = map.width as u32;
+                out.env_height = map.height as u32;
+                out.env_pixels = map
+                    .pixels
+                    .iter()
+                    .zip(&map.pdf_uv)
+                    .map(|(c, pdf)| [c.r as f32, c.g as f32, c.b as f32, *pdf as f32])
+                    .collect();
+                out.marginal_cdf = map.marginal_cdf.iter().map(|&x| x as f32).collect();
+                out.conditional_cdf = map.conditional_cdf.iter().map(|&x| x as f32).collect();
+            }
+        }
+        if let Some(sun) = &env.sun {
+            out.sun_direction = [
+                sun.direction.x as f32,
+                sun.direction.y as f32,
+                sun.direction.z as f32,
+                sun.cos_max as f32,
+            ];
+            out.sun_radiance = [
+                sun.radiance.r as f32,
+                sun.radiance.g as f32,
+                sun.radiance.b as f32,
+                1.0,
+            ];
+        }
+        out
+    }
+}
+
 /// GPU-compatible camera representation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
@@ -329,7 +389,15 @@ pub struct GPURenderParams {
     pub num_lights: u32,
     /// Index of the first sample of this dispatch in each pixel's sequence.
     pub sample_offset: u32,
-    pub _pad: [u32; 3],
+    /// 0 none, 1 constant colour, 2 equirectangular image.
+    pub sky_type: u32,
+    pub env_width: u32,
+    pub env_height: u32,
+    pub sky_color: GPUVec3,
+    /// xyz: unit direction towards the sun, w: cosine of its angular radius.
+    pub sun_direction: [f32; 4],
+    /// xyz: sun radiance, w: 1.0 when a sun is present.
+    pub sun_radiance: [f32; 4],
 }
 
 impl GPURenderParams {
@@ -352,7 +420,12 @@ impl GPURenderParams {
             num_discs,
             num_lights,
             sample_offset: 0,
-            _pad: [0; 3],
+            sky_type: 0,
+            env_width: 0,
+            env_height: 0,
+            sky_color: GPUVec3::zero(),
+            sun_direction: [0.0; 4],
+            sun_radiance: [0.0; 4],
         }
     }
 }

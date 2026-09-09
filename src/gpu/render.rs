@@ -5,10 +5,10 @@ use std::time::Instant;
 use indicatif::{ProgressBar, ProgressStyle};
 use wgpu::util::DeviceExt;
 
-use super::context::{GPUContext, GPUPipeline};
+use super::context::{create_environment_buffers, GPUContext, GPUPipeline};
 use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::GPURenderParams;
-use crate::{Camera, Color};
+use crate::{Camera, Color, Environment};
 
 /// Samples per pass. Kept small so no single dispatch runs long enough to
 /// trip the GPU watchdog; dispatch overhead is negligible next to the work.
@@ -36,10 +36,37 @@ pub fn render_gpu(
     gamma: f64,
     filename: &str,
 ) {
+    render_gpu_with_environment(
+        shapes,
+        camera,
+        &Environment::default(),
+        width,
+        height,
+        samples,
+        max_depth,
+        gamma,
+        filename,
+    );
+}
+
+/// [`render_gpu`] with a sky and/or sun.
+pub fn render_gpu_with_environment(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    environment: &Environment,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+    gamma: f64,
+    filename: &str,
+) {
     let start = Instant::now();
 
-    let pixels = render_gpu_linear(shapes, camera, width, height, samples, max_depth)
-        .expect("Failed to find a suitable GPU adapter");
+    let pixels = render_gpu_linear_with_environment(
+        shapes, camera, environment, width, height, samples, max_depth,
+    )
+    .expect("Failed to find a suitable GPU adapter");
 
     // Convert to image with gamma correction
     println!("Converting to image...");
@@ -72,6 +99,27 @@ pub fn render_gpu_linear(
     samples: u32,
     max_depth: u32,
 ) -> Option<Vec<Color>> {
+    render_gpu_linear_with_environment(
+        shapes,
+        camera,
+        &Environment::default(),
+        width,
+        height,
+        samples,
+        max_depth,
+    )
+}
+
+/// [`render_gpu_linear`] with a sky and/or sun.
+pub fn render_gpu_linear_with_environment(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    environment: &Environment,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+) -> Option<Vec<Color>> {
     println!("Simple path tracer (GPU).");
     println!(
         "Rendering a {}x{}x{}spp image, max depth of {}.",
@@ -80,7 +128,7 @@ pub fn render_gpu_linear(
 
     // Build GPU scene
     println!("Building GPU scene...");
-    let scene = GPUScene::build(shapes, camera);
+    let scene = GPUScene::build_with_environment(shapes, camera, environment);
     println!(
         "Scene: {} spheres, {} discs, {} lights, {} materials, {} BVH nodes",
         scene.num_spheres,
@@ -201,6 +249,9 @@ pub fn render_gpu_linear(
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+    let [env_pixels_buffer, env_cdf_buffer] =
+        create_environment_buffers(&ctx.device, &scene.environment);
+
     // Create params buffer once (will be updated each pass)
     let params_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Params Buffer"),
@@ -246,6 +297,14 @@ pub fn render_gpu_linear(
                 binding: 7,
                 resource: lights_buffer.as_entire_binding(),
             },
+            wgpu::BindGroupEntry {
+                binding: 8,
+                resource: env_pixels_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 9,
+                resource: env_cdf_buffer.as_entire_binding(),
+            },
         ],
     });
 
@@ -278,7 +337,12 @@ pub fn render_gpu_linear(
             num_discs: scene.num_discs,
             num_lights: scene.lights.len() as u32,
             sample_offset: pass * samples_per_pass,
-            _pad: [0; 3],
+            sky_type: scene.environment.sky_type,
+            env_width: scene.environment.env_width,
+            env_height: scene.environment.env_height,
+            sky_color: scene.environment.sky_color,
+            sun_direction: scene.environment.sun_direction,
+            sun_radiance: scene.environment.sun_radiance,
         };
         ctx.queue.write_buffer(&params_buffer, 0, bytemuck::cast_slice(&[params]));
 

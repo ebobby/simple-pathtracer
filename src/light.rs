@@ -1,32 +1,30 @@
-//! Emissive shapes and how to sample directions towards them.
+//! Lights: emissive shapes plus the sky and sun, and how to sample them.
 
 use crate::Vec3;
 
 use std::f64::consts::PI;
 
-/// Geometry of a light, enough to sample it and evaluate its pdf.
+/// Geometry of an emissive shape, enough to sample it and evaluate its pdf.
 #[derive(Clone, Copy, Debug)]
 pub enum LightShape {
     Sphere { center: Vec3, radius: f64 },
     Disc { center: Vec3, normal: Vec3, radius: f64 },
 }
 
-/// A light: which shape in the scene it is, its geometry, and how likely
-/// light selection is to pick it (proportional to emitted power).
 #[derive(Clone, Copy, Debug)]
-pub struct Light {
-    pub shape_id: usize,
-    pub shape: LightShape,
-    pub select_pdf: f64,
+pub enum LightKind {
+    /// Shape `shape_id` in the scene's BVH.
+    Shape { shape_id: usize, shape: LightShape },
+    Sky,
+    Sun,
 }
 
-impl LightShape {
-    pub fn area(&self) -> f64 {
-        match *self {
-            LightShape::Sphere { radius, .. } => 4.0 * PI * radius * radius,
-            LightShape::Disc { radius, .. } => PI * radius * radius,
-        }
-    }
+/// A light and how likely light selection is to pick it (proportional to
+/// emitted power).
+#[derive(Clone, Copy, Debug)]
+pub struct Light {
+    pub kind: LightKind,
+    pub select_pdf: f64,
 }
 
 /// A sampled direction towards a light from a shading point.
@@ -40,13 +38,19 @@ pub struct LightSample {
     pub pdf: f64,
 }
 
-impl Light {
-    /// Sample a direction from `p` towards this light using two uniforms.
+impl LightShape {
+    pub fn area(&self) -> f64 {
+        match *self {
+            LightShape::Sphere { radius, .. } => 4.0 * PI * radius * radius,
+            LightShape::Disc { radius, .. } => PI * radius * radius,
+        }
+    }
+
+    /// Sample a direction from `p` towards this shape using two uniforms.
     /// Returns `None` when the sample carries no energy (e.g. a disc seen
     /// edge-on).
     pub fn sample(&self, p: Vec3, u1: f64, u2: f64) -> Option<LightSample> {
-
-        match self.shape {
+        match *self {
             LightShape::Disc { center, normal, radius } => {
                 let (tangent, bitangent) = normal.orthonormal_basis();
                 let r = radius * u1.sqrt();
@@ -109,9 +113,9 @@ impl Light {
     }
 
     /// Solid-angle pdf that `sample` from `p` would produce the unit
-    /// `direction`, which is known to reach the light at `point`.
+    /// `direction`, which is known to reach the shape at `point`.
     pub fn pdf(&self, p: Vec3, point: Vec3, direction: Vec3) -> f64 {
-        match self.shape {
+        match *self {
             LightShape::Disc { normal, radius, .. } => {
                 let dist_sq = (point - p).norm();
                 let cos_light = direction.dot(normal).abs();

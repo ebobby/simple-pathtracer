@@ -38,10 +38,7 @@ fn furnace(material: Material) -> Scene {
             material: Material::diffuse_light(white()),
         }),
     ];
-    Scene {
-        camera: Camera::new(Vec3::new(0.0, 0.0, 5.0), Vec3::zero(), 30.0, 1.0, 0.0),
-        world: BVH::from_vec(objects),
-    }
+    Scene::new(Camera::new(Vec3::new(0.0, 0.0, 5.0), Vec3::zero(), 30.0, 1.0, 0.0), BVH::from_vec(objects))
 }
 
 fn furnace_radiance(material: Material, integrator: Integrator) -> f64 {
@@ -153,10 +150,7 @@ fn diffuse_disc_lit_from_its_back_matches_analytic_irradiance() {
             material: Material::diffuse_light(Texture::constant_color(Color::new(l, l, l))),
         }),
     ];
-    let scene = Scene {
-        camera: Camera::new(Vec3::new(0.0, 1.0, 0.0), Vec3::zero(), 45.0, 1.0, 0.0),
-        world: BVH::from_vec(objects),
-    };
+    let scene = Scene::new(Camera::new(Vec3::new(0.0, 1.0, 0.0), Vec3::zero(), 45.0, 1.0, 0.0), BVH::from_vec(objects));
     let ray = Ray {
         origin: Vec3::new(0.0, 1.0, 0.0),
         direction: Vec3::new(0.0, -1.0, 0.0),

@@ -50,16 +50,13 @@ fn scene() -> Scene {
         objects.push(Box::new(Sphere { center, radius, material }));
     }
 
-    Scene {
-        camera: Camera::new(
+    Scene::new(Camera::new(
             Vec3::new(0.0, 4.0, 16.0),
             Vec3::new(0.0, 0.5, 0.0),
             40.0,
             f64::from(WIDTH) / f64::from(HEIGHT),
             0.0,
-        ),
-        world: BVH::from_vec(objects),
-    }
+        ), BVH::from_vec(objects))
 }
 
 fn best_of(workers: usize) -> f64 {

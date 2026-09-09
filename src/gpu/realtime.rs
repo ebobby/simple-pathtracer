@@ -10,10 +10,10 @@ use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowId};
 
-use super::context::GPUPipeline;
+use super::context::{create_environment_buffers, GPUPipeline};
 use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::{GPUCamera, GPURenderParams, GPUVec3};
-use crate::Camera;
+use crate::{Camera, Environment};
 
 /// Target GPU time per frame; samples per frame adapt to stay near it.
 const TARGET_FRAME_MS: f64 = 14.0;
@@ -214,6 +214,7 @@ struct RealtimeApp {
     discs_buffer: Option<wgpu::Buffer>,
     materials_buffer: Option<wgpu::Buffer>,
     lights_buffer: Option<wgpu::Buffer>,
+    environment_buffers: Option<[wgpu::Buffer; 2]>,
     output_buffer: Option<wgpu::Buffer>,
     pathtracer_bind_group: Option<wgpu::BindGroup>,
 
@@ -241,12 +242,20 @@ struct RealtimeApp {
     // Initial setup data
     shapes: Option<Vec<GPUShape>>,
     initial_camera: Option<Camera>,
+    environment: Environment,
     width: u32,
     height: u32,
 }
 
 impl RealtimeApp {
-    fn new(shapes: Vec<GPUShape>, camera: Camera, width: u32, height: u32, gamma: f64) -> Self {
+    fn new(
+        shapes: Vec<GPUShape>,
+        camera: Camera,
+        environment: Environment,
+        width: u32,
+        height: u32,
+        gamma: f64,
+    ) -> Self {
         Self {
             window: None,
             device: None,
@@ -266,6 +275,7 @@ impl RealtimeApp {
             discs_buffer: None,
             materials_buffer: None,
             lights_buffer: None,
+            environment_buffers: None,
             output_buffer: None,
             pathtracer_bind_group: None,
             blit_params_buffer: None,
@@ -283,6 +293,7 @@ impl RealtimeApp {
             frame_count: 0,
             shapes: Some(shapes),
             initial_camera: Some(camera),
+            environment,
             width,
             height,
         }
@@ -343,7 +354,7 @@ impl RealtimeApp {
         // Build scene
         let shapes = self.shapes.take().unwrap();
         let camera = self.initial_camera.as_ref().unwrap();
-        let scene = GPUScene::build(shapes, camera);
+        let scene = GPUScene::build_with_environment(shapes, camera, &self.environment);
         println!(
             "Scene: {} spheres, {} discs, {} lights, {} materials, {} BVH nodes",
             scene.num_spheres,
@@ -574,6 +585,8 @@ impl RealtimeApp {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let environment_buffers = create_environment_buffers(&device, &scene.environment);
+
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
             size: output_size,
@@ -618,6 +631,14 @@ impl RealtimeApp {
                     binding: 7,
                     resource: lights_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 8,
+                    resource: environment_buffers[0].as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 9,
+                    resource: environment_buffers[1].as_entire_binding(),
+                },
             ],
         });
 
@@ -647,6 +668,7 @@ impl RealtimeApp {
         self.discs_buffer = Some(discs_buffer);
         self.materials_buffer = Some(materials_buffer);
         self.lights_buffer = Some(lights_buffer);
+        self.environment_buffers = Some(environment_buffers);
         self.output_buffer = Some(output_buffer);
         self.pathtracer_bind_group = Some(pathtracer_bind_group);
         self.blit_params_buffer = Some(blit_params_buffer);
@@ -784,7 +806,12 @@ impl RealtimeApp {
             num_discs: scene.num_discs,
             num_lights: scene.lights.len() as u32,
             sample_offset: if self.reset_accumulation { 0 } else { self.sample_count },
-            _pad: [0; 3],
+            sky_type: scene.environment.sky_type,
+            env_width: scene.environment.env_width,
+            env_height: scene.environment.env_height,
+            sky_color: scene.environment.sky_color,
+            sun_direction: scene.environment.sun_direction,
+            sun_radiance: scene.environment.sun_radiance,
         };
         queue.write_buffer(
             self.params_buffer.as_ref().unwrap(),
@@ -965,6 +992,14 @@ impl RealtimeApp {
                         binding: 7,
                         resource: self.lights_buffer.as_ref().unwrap().as_entire_binding(),
                     },
+                    wgpu::BindGroupEntry {
+                        binding: 8,
+                        resource: self.environment_buffers.as_ref().unwrap()[0].as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 9,
+                        resource: self.environment_buffers.as_ref().unwrap()[1].as_entire_binding(),
+                    },
                 ],
             });
 
@@ -1075,12 +1110,24 @@ pub fn render_realtime(
     height: u32,
     gamma: f64,
 ) {
+    render_realtime_with_environment(shapes, camera, Environment::default(), width, height, gamma);
+}
+
+/// [`render_realtime`] with a sky and/or sun.
+pub fn render_realtime_with_environment(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    environment: Environment,
+    width: u32,
+    height: u32,
+    gamma: f64,
+) {
     println!("Starting real-time renderer...");
     println!("Controls: WASD to move, mouse drag to look, Space/Shift for up/down, ESC to quit");
 
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = RealtimeApp::new(shapes, camera.clone(), width, height, gamma);
+    let mut app = RealtimeApp::new(shapes, camera.clone(), environment, width, height, gamma);
     event_loop.run_app(&mut app).unwrap();
 }

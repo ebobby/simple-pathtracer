@@ -2,7 +2,6 @@
 
 use crate::aabb::AABB;
 use crate::intersectable::{Intersectable, Intersection};
-use crate::light::Light;
 use crate::ray::Ray;
 use crate::{Hitable, Vec3};
 
@@ -20,11 +19,6 @@ struct Node {
 pub struct BVH {
     nodes: Vec<Node>,
     shapes: Vec<Hitable>,
-    lights: Vec<Light>,
-    /// Cumulative selection probabilities, parallel to `lights`.
-    light_cdf: Vec<f64>,
-    /// Index into `lights` for each shape, or `usize::MAX`.
-    light_of_shape: Vec<usize>,
 }
 
 impl BVH {
@@ -39,63 +33,15 @@ impl BVH {
 
         Self::build(&boxes, &mut order, &mut nodes);
 
-        // Collect lights, weighted by emitted power (luminance x area).
-        let mut lights = Vec::new();
-        let mut powers = Vec::new();
-        let mut light_of_shape = vec![usize::MAX; objects.len()];
-        for (shape_id, shape) in objects.iter().enumerate() {
-            if let Some((light_shape, emission)) = shape.as_light() {
-                light_of_shape[shape_id] = lights.len();
-                let luminance = 0.2126 * emission.r + 0.7152 * emission.g + 0.0722 * emission.b;
-                powers.push((luminance * light_shape.area()).max(0.0));
-                lights.push(Light {
-                    shape_id,
-                    shape: light_shape,
-                    select_pdf: 0.0,
-                });
-            }
-        }
-        let total: f64 = powers.iter().sum();
-        let mut light_cdf = Vec::with_capacity(lights.len());
-        let mut cumulative = 0.0;
-        for (light, power) in lights.iter_mut().zip(&powers) {
-            light.select_pdf = if total > 0.0 {
-                power / total
-            } else {
-                1.0 / powers.len() as f64
-            };
-            cumulative += light.select_pdf;
-            light_cdf.push(cumulative);
-        }
-
         Self {
             nodes,
             shapes: objects,
-            lights,
-            light_cdf,
-            light_of_shape,
         }
     }
 
-    /// All emissive shapes in the scene.
-    pub fn lights(&self) -> &[Light] {
-        &self.lights
-    }
-
-    /// Pick a light with probability proportional to its power, from a
-    /// uniform `u` in [0, 1). Returns the light and its selection pdf.
-    pub fn pick_light(&self, u: f64) -> (&Light, f64) {
-        let index = self
-            .light_cdf
-            .partition_point(|&cdf| cdf <= u)
-            .min(self.lights.len() - 1);
-        let light = &self.lights[index];
-        (light, light.select_pdf)
-    }
-
-    /// The light corresponding to a shape id from an [`Intersection`], if any.
-    pub fn light_of_shape(&self, shape_id: usize) -> Option<&Light> {
-        self.lights.get(*self.light_of_shape.get(shape_id)?)
+    /// The shapes, indexed by the `shape_id` of intersections.
+    pub fn shapes(&self) -> &[Hitable] {
+        &self.shapes
     }
 
     /// Append the subtree for `order` (a set of shape indices) to `nodes`,

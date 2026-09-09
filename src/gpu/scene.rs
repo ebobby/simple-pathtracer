@@ -1,11 +1,12 @@
 //! GPU scene builder - converts CPU scene to GPU-friendly format.
 
 use crate::aabb::AABB;
+use crate::environment::luminance;
 use crate::gpu_types::*;
 use crate::shape::{Disc, Sphere};
-use crate::Camera;
-use crate::Material;
-use crate::Vec3;
+use crate::{Camera, Environment, Material, Vec3};
+
+use std::f64::consts::PI;
 
 use std::collections::HashMap;
 
@@ -58,15 +59,26 @@ pub struct GPUScene {
     pub spheres: Vec<GPUSphere>,
     pub discs: Vec<GPUDisc>,
     pub materials: Vec<GPUMaterial>,
-    /// Emissive shapes with power-proportional selection probabilities.
+    /// Emissive shapes (and the sky and sun, with sentinel indices) with
+    /// power-proportional selection probabilities.
     pub lights: Vec<GPULight>,
+    pub environment: GPUEnvironment,
     pub num_spheres: u32,
     pub num_discs: u32,
 }
 
 impl GPUScene {
-    /// Build a GPU scene from shapes and camera.
+    /// Build a GPU scene from shapes and camera, with no environment.
     pub fn build(shapes: Vec<GPUShape>, camera: &Camera) -> Self {
+        Self::build_with_environment(shapes, camera, &Environment::default())
+    }
+
+    /// Build a GPU scene from shapes, camera and environment.
+    pub fn build_with_environment(
+        shapes: Vec<GPUShape>,
+        camera: &Camera,
+        environment: &Environment,
+    ) -> Self {
         let mut spheres = Vec::new();
         let mut discs = Vec::new();
         let mut materials = Vec::new();
@@ -118,20 +130,34 @@ impl GPUScene {
         let num_spheres = spheres.len() as u32;
         let num_discs = discs.len() as u32;
 
-        // Lights, weighted by emitted power (luminance x area)
+        // Lights, weighted by emitted power, matching `Scene::build_lights`:
+        // shapes π L A, infinite lights irradiance x projected scene area.
         let mut light_shapes = Vec::new();
         let mut powers = Vec::new();
         for (i, shape) in shapes.iter().enumerate() {
             if shape.material().is_emissive() {
                 let (center, area) = match shape {
-                    GPUShape::Sphere(s) => (s.center, 4.0 * std::f64::consts::PI * s.radius * s.radius),
-                    GPUShape::Disc(d) => (d.center, std::f64::consts::PI * d.radius * d.radius),
+                    GPUShape::Sphere(s) => (s.center, 4.0 * PI * s.radius * s.radius),
+                    GPUShape::Disc(d) => (d.center, PI * d.radius * d.radius),
                 };
                 let emission = shape.material().emit(0.5, 0.5, center);
-                let luminance = 0.2126 * emission.r + 0.7152 * emission.g + 0.0722 * emission.b;
                 light_shapes.push(i as u32);
-                powers.push((luminance * area).max(0.0));
+                powers.push((PI * luminance(emission) * area).max(0.0));
             }
+        }
+        let bounds = shape_indices
+            .iter()
+            .map(|(_, b)| *b)
+            .reduce(AABB::surrounding);
+        let radius = bounds.map_or(1.0, |b| (b.max - b.min).length() * 0.5);
+        let projected_area = PI * radius * radius;
+        if let Some(sky) = &environment.sky {
+            light_shapes.push(LIGHT_SKY);
+            powers.push((sky.irradiance() * projected_area).max(0.0));
+        }
+        if let Some(sun) = &environment.sun {
+            light_shapes.push(LIGHT_SUN);
+            powers.push((sun.irradiance() * projected_area).max(0.0));
         }
         let total: f64 = powers.iter().sum();
         let mut cumulative = 0.0;
@@ -162,6 +188,7 @@ impl GPUScene {
             discs,
             materials,
             lights,
+            environment: GPUEnvironment::from(environment),
             num_spheres,
             num_discs,
         }

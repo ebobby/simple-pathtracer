@@ -19,10 +19,7 @@ fn mirror_facing_light() -> Scene {
         material: Material::diffuse_light(Texture::constant_color(Color::new(2.0, 3.0, 4.0))),
     };
     let objects: Vec<Hitable> = vec![Box::new(mirror), Box::new(light)];
-    Scene {
-        camera: Camera::new(Vec3::zero(), Vec3::new(0.0, 0.0, -1.0), 45.0, 1.0, 0.0),
-        world: BVH::from_vec(objects),
-    }
+    Scene::new(Camera::new(Vec3::zero(), Vec3::new(0.0, 0.0, -1.0), 45.0, 1.0, 0.0), BVH::from_vec(objects))
 }
 
 fn towards_mirror() -> Ray {

@@ -1,6 +1,6 @@
 //! Next event estimation must be unbiased and match analytic direct lighting.
 
-use crate::light::{Light, LightShape};
+use crate::light::{LightKind, LightShape};
 use crate::ray::Ray;
 use crate::shape::{Disc, Sphere};
 use crate::{radiance_with, render_linear_with, Integrator};
@@ -28,10 +28,7 @@ fn plane_under_disc(albedo: f64, radiance: f64, r: f64, h: f64) -> Scene {
             ))),
         }),
     ];
-    Scene {
-        camera: Camera::new(Vec3::new(0.0, 1.0, 0.0), Vec3::zero(), 45.0, 1.0, 0.0),
-        world: BVH::from_vec(objects),
-    }
+    Scene::new(Camera::new(Vec3::new(0.0, 1.0, 0.0), Vec3::zero(), 45.0, 1.0, 0.0), BVH::from_vec(objects))
 }
 
 #[test]
@@ -99,16 +96,13 @@ fn nee_and_bsdf_only_agree_on_mean_brightness() {
             material: Material::diffuse_light(Texture::constant_color(Color::new(6.0, 8.0, 12.0))),
         }),
     ];
-    let scene = Scene {
-        camera: Camera::new(
+    let scene = Scene::new(Camera::new(
             Vec3::new(0.0, 2.5, 9.0),
             Vec3::new(0.0, 1.0, 0.0),
             45.0,
             4.0 / 3.0,
             0.0,
-        ),
-        world: BVH::from_vec(objects),
-    };
+        ), BVH::from_vec(objects));
     let (w, h, depth) = (32, 24, 12);
 
     let mean = |pixels: &[Color]| {
@@ -129,22 +123,14 @@ fn nee_and_bsdf_only_agree_on_mean_brightness() {
 #[test]
 fn light_sample_pdf_matches_pdf_evaluation() {
     let lights = [
-        Light {
-            shape_id: 0,
-            shape: LightShape::Disc {
-                center: Vec3::new(1.0, 3.0, -2.0),
-                normal: Vec3::new(0.2, -1.0, 0.4).normalize(),
-                radius: 1.5,
-            },
-            select_pdf: 0.5,
+        LightShape::Disc {
+            center: Vec3::new(1.0, 3.0, -2.0),
+            normal: Vec3::new(0.2, -1.0, 0.4).normalize(),
+            radius: 1.5,
         },
-        Light {
-            shape_id: 1,
-            shape: LightShape::Sphere {
-                center: Vec3::new(-2.0, 2.0, 1.0),
-                radius: 0.8,
-            },
-            select_pdf: 0.5,
+        LightShape::Sphere {
+            center: Vec3::new(-2.0, 2.0, 1.0),
+            radius: 0.8,
         },
     ];
     let p = Vec3::new(0.3, 0.0, 0.1);
@@ -166,11 +152,7 @@ fn light_sample_pdf_matches_pdf_evaluation() {
 
 #[test]
 fn point_inside_sphere_light_samples_full_sphere() {
-    let light = Light {
-        shape_id: 0,
-        shape: LightShape::Sphere { center: Vec3::zero(), radius: 10.0 },
-        select_pdf: 1.0,
-    };
+    let light = LightShape::Sphere { center: Vec3::zero(), radius: 10.0 };
     let sample = light.sample(Vec3::new(1.0, 2.0, 3.0), 0.3, 0.6).unwrap();
     assert!((sample.pdf - 1.0 / (4.0 * std::f64::consts::PI)).abs() < 1e-12);
 }
@@ -190,14 +172,21 @@ fn lights_are_selected_in_proportion_to_power() {
             material: Material::diffuse_light(Texture::constant_color(Color::new(1.0, 1.0, 1.0))),
         }),
     ];
-    let bvh = BVH::from_vec(objects);
+    let scene = Scene::new(
+        Camera::new(Vec3::new(0.0, 0.0, 5.0), Vec3::zero(), 45.0, 1.0, 0.0),
+        BVH::from_vec(objects),
+    );
 
     let mut strong = 0;
     let n = 10_000;
     for i in 0..n {
         let (u, _) = Sampler::new(3, i).get_2d(0);
-        let (light, pdf) = bvh.pick_light(u);
-        if light.shape_id == 0 {
+        let (light, pdf) = scene.pick_light(u);
+        let shape_id = match light.kind {
+            LightKind::Shape { shape_id, .. } => shape_id,
+            _ => panic!("unexpected light kind"),
+        };
+        if shape_id == 0 {
             strong += 1;
             assert!((pdf - 0.9).abs() < 1e-9, "strong light pdf {pdf}");
         } else {
@@ -207,5 +196,5 @@ fn lights_are_selected_in_proportion_to_power() {
     let fraction = strong as f64 / n as f64;
     assert!((fraction - 0.9).abs() < 0.02, "strong light picked {fraction} of the time");
 
-    assert!((bvh.light_of_shape(1).unwrap().select_pdf - 0.1).abs() < 1e-9);
+    assert!((scene.light_of_shape(1).unwrap().select_pdf - 0.1).abs() < 1e-9);
 }

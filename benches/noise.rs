@@ -50,16 +50,13 @@ fn cornell() -> Scene {
         material: Material::diffuse_light(Texture::constant_color(Color::new(15.0, 15.0, 15.0))),
     }));
 
-    Scene {
-        camera: Camera::new(
+    Scene::new(Camera::new(
             Vec3::new(0.0, 5.0, 15.0),
             Vec3::new(0.0, 5.0, 0.0),
             45.0,
             f64::from(WIDTH) / f64::from(HEIGHT),
             0.0,
-        ),
-        world: BVH::from_vec(objects),
-    }
+        ), BVH::from_vec(objects))
 }
 
 /// Dark room with one strong and several weak sphere lights: exercises light
@@ -86,16 +83,13 @@ fn uneven_lights() -> Scene {
         }));
     }
 
-    Scene {
-        camera: Camera::new(
+    Scene::new(Camera::new(
             Vec3::new(0.0, 3.0, 10.0),
             Vec3::new(0.0, 1.0, -2.0),
             45.0,
             f64::from(WIDTH) / f64::from(HEIGHT),
             0.0,
-        ),
-        world: BVH::from_vec(objects),
-    }
+        ), BVH::from_vec(objects))
 }
 
 fn rmse(image: &[Color], reference: &[Color]) -> f64 {

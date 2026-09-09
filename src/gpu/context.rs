@@ -1,5 +1,9 @@
 //! GPU context and pipeline setup using wgpu.
 
+use wgpu::util::DeviceExt;
+
+use crate::gpu_types::GPUEnvironment;
+
 
 /// GPU context holding device and queue.
 pub struct GPUContext {
@@ -42,6 +46,36 @@ impl GPUContext {
 
         Some(Self { device, queue })
     }
+}
+
+/// The two environment buffers: texels, and the marginal CDF followed by
+/// the conditional CDF rows. Harmless dummy contents when there is no image
+/// sky.
+pub fn create_environment_buffers(
+    device: &wgpu::Device,
+    environment: &GPUEnvironment,
+) -> [wgpu::Buffer; 2] {
+    let pixels: &[[f32; 4]] = if environment.env_pixels.is_empty() {
+        &[[0.0; 4]]
+    } else {
+        &environment.env_pixels
+    };
+    let mut cdf: Vec<f32> = environment.marginal_cdf.clone();
+    cdf.extend_from_slice(&environment.conditional_cdf);
+    if cdf.is_empty() {
+        cdf.push(1.0);
+    }
+    let make = |label: &str, contents: &[u8]| {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents,
+            usage: wgpu::BufferUsages::STORAGE,
+        })
+    };
+    [
+        make("Environment Texels", bytemuck::cast_slice(pixels)),
+        make("Environment CDFs", bytemuck::cast_slice(&cdf)),
+    ]
 }
 
 /// GPU pipeline for path tracing.
@@ -143,6 +177,28 @@ impl GPUPipeline {
                 // Light shape indices storage
                 wgpu::BindGroupLayoutEntry {
                     binding: 7,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                // Environment map texels (rgb + pdf) and its CDFs (marginal, then
+                // conditional rows, in one buffer: devices allow 8 storage buffers)
+                wgpu::BindGroupLayoutEntry {
+                    binding: 8,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 9,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: true },

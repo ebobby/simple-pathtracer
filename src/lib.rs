@@ -4,6 +4,7 @@ mod aabb;
 mod bvh;
 mod camera;
 mod color;
+mod environment;
 mod intersectable;
 mod light;
 mod material;
@@ -22,12 +23,15 @@ pub use aabb::AABB;
 pub use bvh::BVH;
 pub use camera::Camera;
 pub use color::Color;
-pub use gpu::{render_gpu, render_gpu_linear};
-pub use gpu::render_realtime;
+pub use environment::{Environment, EnvironmentMap, Sky, Sun};
+pub use gpu::{
+    render_gpu, render_gpu_linear, render_gpu_linear_with_environment, render_gpu_with_environment,
+};
+pub use gpu::{render_realtime, render_realtime_with_environment};
 pub use gpu::GPUScene;
 pub use gpu::GPUShape;
 pub use gpu_types::*;
-pub use light::{Light, LightShape};
+pub use light::{Light, LightKind, LightShape};
 pub use material::{Material, Principled};
 pub use sampler::Sampler;
 pub use scene::Scene;
@@ -277,8 +281,7 @@ fn radiance_with(
     integrator: Integrator,
     sampler: &Sampler,
 ) -> Color {
-    let lights = scene.world.lights();
-    let use_nee = integrator == Integrator::NextEventEstimation && !lights.is_empty();
+    let use_nee = integrator == Integrator::NextEventEstimation && !scene.lights().is_empty();
 
     let mut ray = ray.clone();
     let mut depth = depth;
@@ -293,6 +296,27 @@ fn radiance_with(
 
     loop {
         let Some(intersection) = scene.world.intersect(&ray, 0.0001, f64::INFINITY) else {
+            // Left the scene: sky and sun, each MIS-weighted against the
+            // chance that light sampling would have picked this direction.
+            let direction = ray.direction.normalize();
+            if let Some(sky) = &scene.environment.sky {
+                let mut weight = 1.0;
+                if use_nee && !prev_specular {
+                    let light = scene.sky_light().unwrap();
+                    weight = light::power_heuristic(prev_pdf, sky.pdf(direction) * light.select_pdf);
+                }
+                color += throughput * sky.radiance(direction) * weight;
+            }
+            if let Some(sun) = &scene.environment.sun {
+                if sun.contains(direction) {
+                    let mut weight = 1.0;
+                    if use_nee && !prev_specular {
+                        let light = scene.sun_light().unwrap();
+                        weight = light::power_heuristic(prev_pdf, sun.pdf() * light.select_pdf);
+                    }
+                    color += throughput * sun.radiance * weight;
+                }
+            }
             break;
         };
 
@@ -309,11 +333,12 @@ fn radiance_with(
             .emit(intersection.u, intersection.v, intersection.p);
         if emitted.r > 0.0 || emitted.g > 0.0 || emitted.b > 0.0 {
             let weight = if use_nee && !prev_specular {
-                match scene.world.light_of_shape(intersection.shape_id) {
+                match scene.light_of_shape(intersection.shape_id) {
                     Some(light) => {
                         let direction = ray.direction.normalize();
-                        let pdf_light =
-                            light.pdf(ray.origin, intersection.p, direction) * light.select_pdf;
+                        let pdf_light = scene
+                            .light_pdf(light, ray.origin, intersection.p, direction)
+                            * light.select_pdf;
                         light::power_heuristic(prev_pdf, pdf_light)
                     }
                     None => 1.0,
@@ -423,9 +448,9 @@ fn sample_direct_light(
     u_light: (f64, f64),
     u_select: f64,
 ) -> Color {
-    let (light, select_pdf) = scene.world.pick_light(u_select);
+    let (light, select_pdf) = scene.pick_light(u_select);
 
-    let Some(sample) = light.sample(intersection.p, u_light.0, u_light.1) else {
+    let Some(sample) = scene.sample_light(light, intersection.p, u_light.0, u_light.1) else {
         return Color::new(0.0, 0.0, 0.0);
     };
     let cos_theta = sample.direction.dot(intersection.facing_normal(wo));
@@ -440,14 +465,19 @@ fn sample_direct_light(
         origin: intersection.p,
         direction: sample.direction,
     };
-    let Some(hit) = scene.world.intersect(&shadow_ray, 0.0001, f64::INFINITY) else {
-        return Color::new(0.0, 0.0, 0.0);
+    let shadow_hit = scene.world.intersect(&shadow_ray, 0.0001, f64::INFINITY);
+    let emitted = match (light.kind, shadow_hit) {
+        // Shape lights: the nearest hit must be that shape
+        (light::LightKind::Shape { shape_id, .. }, Some(hit)) if hit.shape_id == shape_id => {
+            hit.material.emit(hit.u, hit.v, hit.p)
+        }
+        // Infinite lights: the shadow ray must leave the scene
+        (light::LightKind::Sky, None) => {
+            scene.environment.sky.as_ref().unwrap().radiance(sample.direction)
+        }
+        (light::LightKind::Sun, None) => scene.environment.sun.as_ref().unwrap().radiance,
+        _ => return Color::new(0.0, 0.0, 0.0),
     };
-    if hit.shape_id != light.shape_id {
-        return Color::new(0.0, 0.0, 0.0);
-    }
-
-    let emitted = hit.material.emit(hit.u, hit.v, hit.p);
     let pdf_light = sample.pdf * select_pdf;
     let weight = if full_weight {
         1.0
