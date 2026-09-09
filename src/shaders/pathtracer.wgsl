@@ -158,7 +158,7 @@ fn build_onb(n: vec3<f32>) -> mat3x3<f32> {
     return mat3x3<f32>(t, bt, n);
 }
 
-// Cosine-weighted hemisphere sampling (faster than rejection sampling)
+// Cosine-weighted hemisphere sampling
 fn random_cosine_direction(normal: vec3<f32>) -> vec3<f32> {
     let r1 = random();
     let r2 = random();
@@ -396,13 +396,8 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
 
     switch material.material_type {
         case MATERIAL_LAMBERTIAN: {
-            // Diffuse scattering (matches CPU implementation)
-            var scatter_dir = hit.normal + random_in_unit_sphere();
-            // Catch degenerate scatter direction
-            if length(scatter_dir) < 0.0001 {
-                scatter_dir = hit.normal;
-            }
-            result.ray = Ray(offset_origin, scatter_dir);
+            // Cosine-weighted diffuse scattering (matches CPU implementation)
+            result.ray = Ray(offset_origin, random_cosine_direction(hit.normal));
             result.attenuation = material.color.xyz;
             result.valid = true;
         }

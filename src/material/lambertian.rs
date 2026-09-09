@@ -16,11 +16,9 @@ impl Scatterable for Lambertian {
     }
 
     fn scatter(&self, _ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
-        let target = intersection.p + intersection.normal + super::random_in_unit_sphere();
-
         let scattered = Ray {
             origin: intersection.p,
-            direction: target - intersection.p,
+            direction: super::random_cosine_direction(intersection.normal),
         };
 
         Some(Scattered {

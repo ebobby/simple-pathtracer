@@ -93,6 +93,24 @@ fn random_in_unit_sphere() -> Vec3 {
     }
 }
 
+/// Cosine-weighted direction on the hemisphere around the unit `normal`.
+/// Uses the same orthonormal basis construction as the GPU shader.
+#[inline]
+pub(crate) fn random_cosine_direction(normal: Vec3) -> Vec3 {
+    let r1 = rng::get_random_number();
+    let r2 = rng::get_random_number();
+
+    let phi = 2.0 * std::f64::consts::PI * r1;
+    let sqrt_r2 = r2.sqrt();
+
+    let x = phi.cos() * sqrt_r2;
+    let y = phi.sin() * sqrt_r2;
+    let z = (1.0 - r2).sqrt();
+
+    let (tangent, bitangent) = normal.orthonormal_basis();
+    tangent * x + bitangent * y + normal * z
+}
+
 fn reflect(v: Vec3, n: Vec3) -> Vec3 {
     v - 2.0 * v.dot(n) * n
 }
