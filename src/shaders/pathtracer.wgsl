@@ -667,12 +667,12 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>, u2: vec2<
                 // Ray exiting glass (hitting from inside)
                 outward_normal = -hit.normal;
                 ni_over_nt = material.ior;
-                cosine = material.ior * d / length(ray.direction);
+                cosine = material.ior * d; // d is already a cosine (unit direction)
             } else {
                 // Ray entering glass (hitting from outside)
                 outward_normal = hit.normal;
                 ni_over_nt = 1.0 / material.ior;
-                cosine = -d / length(ray.direction);
+                cosine = -d;
             }
 
             let cos_theta = min(dot(-unit_direction, outward_normal), 1.0);
