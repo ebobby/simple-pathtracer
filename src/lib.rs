@@ -214,7 +214,7 @@ fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
                 }
             }
 
-            if depth < 100 {
+            if depth < max_depth {
                 emitted + attenuation * radiance(scene, &scattered.scattered, depth + 1, max_depth)
             } else {
                 emitted
@@ -236,3 +236,6 @@ fn tent_filter_factor() -> f64 {
         1.0 - (2.0 - r).sqrt()
     }
 }
+
+#[cfg(test)]
+mod tests;
