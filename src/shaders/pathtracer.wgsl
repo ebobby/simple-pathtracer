@@ -303,8 +303,9 @@ fn intersect_disc(ray: Ray, disc: Disc, t_min: f32, t_max: f32) -> HitRecord {
     hit.normal = normal;
     hit.material_idx = disc.material_idx;
     hit.valid = true;
-    hit.u = 0.5 + d.x / (2.0 * radius);
-    hit.v = 0.5 + d.z / (2.0 * radius);
+    let onb = build_onb(normal);
+    hit.u = 0.5 + dot(d, onb[0]) / (2.0 * radius);
+    hit.v = 0.5 + dot(d, onb[1]) / (2.0 * radius);
 
     return hit;
 }
