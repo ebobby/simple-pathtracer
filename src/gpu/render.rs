@@ -8,7 +8,7 @@ use wgpu::util::DeviceExt;
 use super::context::{create_environment_buffers, GPUContext, GPUPipeline};
 use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::GPURenderParams;
-use crate::{Camera, Color, Environment};
+use crate::{Camera, Color, Environment, Tonemap};
 
 /// Samples per pass. Kept small so no single dispatch runs long enough to
 /// trip the GPU watchdog; dispatch overhead is negligible next to the work.
@@ -61,6 +61,24 @@ pub fn render_gpu_with_environment(
     gamma: f64,
     filename: &str,
 ) {
+    let tonemap = Tonemap::default().gamma(gamma);
+    render_gpu_with(
+        shapes, camera, environment, &tonemap, width, height, samples, max_depth, filename,
+    );
+}
+
+/// [`render_gpu`] with an environment and an explicit output stage.
+pub fn render_gpu_with(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    environment: &Environment,
+    tonemap: &Tonemap,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+    filename: &str,
+) {
     let start = Instant::now();
 
     let pixels = render_gpu_linear_with_environment(
@@ -68,15 +86,14 @@ pub fn render_gpu_with_environment(
     )
     .expect("Failed to find a suitable GPU adapter");
 
-    // Convert to image with gamma correction
+    // Convert to image with exposure, tone curve and gamma
     println!("Converting to image...");
     let mut imgbuf = image::ImageBuffer::new(width, height);
-    let gamma_correction = 1.0 / gamma;
 
     for (i, color) in pixels.iter().enumerate() {
         let x = i as u32 % width;
         let y = i as u32 / width;
-        imgbuf.put_pixel(x, y, color.to_gamma_rgb(gamma_correction));
+        imgbuf.put_pixel(x, y, tonemap.apply(*color));
     }
 
     // Save image

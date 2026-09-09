@@ -13,6 +13,7 @@ mod rng;
 mod sampler;
 mod scene;
 mod texture;
+mod tonemap;
 mod vector;
 
 pub mod gpu;
@@ -25,9 +26,10 @@ pub use camera::Camera;
 pub use color::Color;
 pub use environment::{Environment, EnvironmentMap, Sky, Sun};
 pub use gpu::{
-    render_gpu, render_gpu_linear, render_gpu_linear_with_environment, render_gpu_with_environment,
+    render_gpu, render_gpu_linear, render_gpu_linear_with_environment, render_gpu_with,
+    render_gpu_with_environment,
 };
-pub use gpu::{render_realtime, render_realtime_with_environment};
+pub use gpu::{render_realtime, render_realtime_with, render_realtime_with_environment};
 pub use gpu::GPUScene;
 pub use gpu::GPUShape;
 pub use gpu_types::*;
@@ -36,6 +38,7 @@ pub use material::{Material, Principled};
 pub use sampler::Sampler;
 pub use scene::Scene;
 pub use texture::Texture;
+pub use tonemap::{ToneCurve, Tonemap};
 pub use vector::Vec3;
 
 use intersectable::*;
@@ -93,16 +96,30 @@ pub fn render(
     workers: usize,
     filename: &str,
 ) {
+    let tonemap = Tonemap::default().gamma(gamma);
+    render_with_tonemap(scene, width, height, samples, max_depth, workers, &tonemap, filename);
+}
+
+/// [`render`] with an explicit output stage (exposure, tone curve, gamma).
+pub fn render_with_tonemap(
+    scene: Scene,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+    workers: usize,
+    tonemap: &Tonemap,
+    filename: &str,
+) {
     let start = Instant::now();
 
     let pixels = render_linear(&scene, width, height, samples, max_depth, workers);
 
-    let gamma_correction = gamma.recip();
     let mut imgbuf = image::ImageBuffer::new(width, height);
     for (i, color) in pixels.iter().enumerate() {
         let x = i as u32 % width;
         let y = i as u32 / width;
-        imgbuf.put_pixel(x, y, color.to_gamma_rgb(gamma_correction));
+        imgbuf.put_pixel(x, y, tonemap.apply(*color));
     }
     imgbuf.save(filename).unwrap();
 

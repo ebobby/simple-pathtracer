@@ -8,3 +8,4 @@ mod sampler;
 mod ggx;
 mod principled;
 mod environment;
+mod tonemap;

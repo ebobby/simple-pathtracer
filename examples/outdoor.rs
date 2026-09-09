@@ -9,7 +9,8 @@
 use pathtracer::shape::*;
 use pathtracer::Principled;
 use pathtracer::{
-    Camera, Color, Environment, GPUShape, Hitable, Material, Scene, Sky, Sun, Texture, Vec3, BVH,
+    Camera, Color, Environment, GPUShape, Hitable, Material, Scene, Sky, Sun, Texture, ToneCurve,
+    Tonemap, Vec3, BVH,
 };
 
 fn principled(color: Color) -> Principled {
@@ -105,8 +106,10 @@ fn main() {
     let height = 600;
     let samples = 200;
     let aspect_ratio = f64::from(width) / f64::from(height);
-    let gamma = 2.2f64;
     let max_depth = 30;
+    // The sunlit ground reflects a radiance near 1.6; a quarter-exposure
+    // puts it around mid-grey and ACES keeps the highlights from clipping.
+    let tonemap = Tonemap::new(0.25, ToneCurve::Aces);
     let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4);
 
     let spheres = build_shapes();
@@ -115,15 +118,15 @@ fn main() {
 
     if use_gpu {
         let gpu_shapes: Vec<GPUShape> = spheres.into_iter().map(GPUShape::Sphere).collect();
-        pathtracer::render_gpu_with_environment(
+        pathtracer::render_gpu_with(
             gpu_shapes,
             &camera,
             &environment,
+            &tonemap,
             width,
             height,
             samples,
             max_depth,
-            gamma,
             "output/outdoor-gpu.png",
         );
     } else {
@@ -132,14 +135,14 @@ fn main() {
             .map(|s| Box::new(s) as Hitable)
             .collect();
         let scene = Scene::new(camera, BVH::from_vec(objects)).with_environment(environment);
-        pathtracer::render(
+        pathtracer::render_with_tonemap(
             scene,
             width,
             height,
             samples,
             max_depth,
-            gamma,
             workers,
+            &tonemap,
             "output/outdoor.png",
         );
     }

@@ -13,7 +13,7 @@ use winit::window::{Window, WindowId};
 use super::context::{create_environment_buffers, GPUPipeline};
 use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::{GPUCamera, GPURenderParams, GPUVec3};
-use crate::{Camera, Environment};
+use crate::{Camera, Environment, Tonemap};
 
 /// Target GPU time per frame; samples per frame adapt to stay near it.
 const TARGET_FRAME_MS: f64 = 14.0;
@@ -40,10 +40,13 @@ const BLIT_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Floa
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct BlitParams {
     sample_count: u32,
-    gamma: f32,
+    exposure: f32,
     /// Size of the grid the tracer rendered (may be smaller than the window).
     render_width: u32,
     render_height: u32,
+    /// Tone curve id (see `ToneCurve::gpu_id`).
+    curve: u32,
+    _pad: [u32; 3],
 }
 
 /// Camera controller state
@@ -235,7 +238,7 @@ struct RealtimeApp {
     samples_per_frame_moving: u32,
     moving: bool,
     reset_accumulation: bool,
-    gamma: f64,
+    tonemap: Tonemap,
     last_frame: Instant,
     frame_count: u64,
 
@@ -252,9 +255,9 @@ impl RealtimeApp {
         shapes: Vec<GPUShape>,
         camera: Camera,
         environment: Environment,
+        tonemap: Tonemap,
         width: u32,
         height: u32,
-        gamma: f64,
     ) -> Self {
         Self {
             window: None,
@@ -288,7 +291,7 @@ impl RealtimeApp {
             samples_per_frame_moving: MIN_SAMPLES_PER_FRAME,
             moving: false,
             reset_accumulation: true,
-            gamma,
+            tonemap,
             last_frame: Instant::now(),
             frame_count: 0,
             shapes: Some(shapes),
@@ -826,9 +829,11 @@ impl RealtimeApp {
         self.sample_count += samples_this_frame;
         let blit_params = BlitParams {
             sample_count: self.sample_count,
-            gamma: self.gamma as f32,
+            exposure: self.tonemap.exposure as f32,
             render_width,
             render_height,
+            curve: self.tonemap.curve.gpu_id(),
+            _pad: [0; 3],
         };
         queue.write_buffer(
             self.blit_params_buffer.as_ref().unwrap(),
@@ -1122,12 +1127,26 @@ pub fn render_realtime_with_environment(
     height: u32,
     gamma: f64,
 ) {
+    let tonemap = Tonemap::default().gamma(gamma);
+    render_realtime_with(shapes, camera, environment, tonemap, width, height);
+}
+
+/// [`render_realtime`] with an environment and an explicit output stage. The
+/// surface is sRGB, so `tonemap.gamma` is not used here.
+pub fn render_realtime_with(
+    shapes: Vec<GPUShape>,
+    camera: &Camera,
+    environment: Environment,
+    tonemap: Tonemap,
+    width: u32,
+    height: u32,
+) {
     println!("Starting real-time renderer...");
     println!("Controls: WASD to move, mouse drag to look, Space/Shift for up/down, ESC to quit");
 
     let event_loop = EventLoop::new().unwrap();
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    let mut app = RealtimeApp::new(shapes, camera.clone(), environment, width, height, gamma);
+    let mut app = RealtimeApp::new(shapes, camera.clone(), environment, tonemap, width, height);
     event_loop.run_app(&mut app).unwrap();
 }
