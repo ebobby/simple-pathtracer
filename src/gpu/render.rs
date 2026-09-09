@@ -10,9 +10,9 @@ use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::GPURenderParams;
 use crate::{Camera, Color};
 
-/// Samples per pass - balance between progress granularity and overhead
-/// Higher values = less dispatch overhead, but coarser progress updates
-const SAMPLES_PER_PASS: u32 = 500;
+/// Samples per pass. Kept small so no single dispatch runs long enough to
+/// trip the GPU watchdog; dispatch overhead is negligible next to the work.
+const SAMPLES_PER_PASS: u32 = 16;
 
 /// Render a scene using GPU compute shaders and save it as an image.
 ///
