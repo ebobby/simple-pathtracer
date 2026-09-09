@@ -9,11 +9,13 @@ mod diffuse_light;
 pub(crate) mod ggx;
 mod lambertian;
 mod metal;
+mod principled;
 
 pub use dielectric::Dielectric;
 pub use diffuse_light::DiffuseLight;
 pub use lambertian::Lambertian;
 pub use metal::Metal;
+pub use principled::Principled;
 
 /// Material object.
 ///
@@ -28,6 +30,7 @@ pub enum Material {
     Dielectric(Dielectric),
     Metal(Metal),
     DiffuseLight(DiffuseLight),
+    Principled(Principled),
 }
 
 #[derive(Debug)]
@@ -39,9 +42,11 @@ pub struct Scattered {
     pub pdf: Option<f64>,
 }
 
-/// Three uniform random numbers a material may use when scattering:
-/// two for the direction and one for a scalar decision (Fresnel, fuzz).
-pub type ScatterUniforms = [f64; 3];
+/// Uniform random numbers a material may use when scattering: two for a
+/// microfacet or primary direction, one for a scalar decision (Fresnel, lobe
+/// choice), and two more for a secondary direction (the principled diffuse
+/// lobe).
+pub type ScatterUniforms = [f64; 5];
 
 pub trait Scatterable {
     fn emit(&self, u: f64, v: f64, p: Vec3) -> Color;
@@ -76,7 +81,17 @@ impl Material {
     pub fn emit(&self, u: f64, v: f64, p: Vec3) -> Color {
         match self {
             Material::DiffuseLight(light) => light.emit(u, v, p),
+            Material::Principled(principled) => principled.emit(u, v, p),
             _ => Color::new(0.0, 0.0, 0.0),
+        }
+    }
+
+    /// True when `emit` can return something other than black.
+    pub fn is_emissive(&self) -> bool {
+        match self {
+            Material::DiffuseLight(_) => true,
+            Material::Principled(p) => p.emission.r > 0.0 || p.emission.g > 0.0 || p.emission.b > 0.0,
+            _ => false,
         }
     }
 
@@ -85,7 +100,7 @@ impl Material {
     /// for delta materials (mirror, glass, lights) and for directions below
     /// the surface. Used for light sampling.
     pub fn eval(&self, wo: Vec3, wi: Vec3, intersection: &Intersection) -> Option<(Color, f64)> {
-        let normal = intersection.normal;
+        let normal = intersection.facing_normal(wo);
         match self {
             Material::Lambertian(lambertian) => {
                 let cos_i = wi.dot(normal);
@@ -104,7 +119,27 @@ impl Material {
                     .value(intersection.u, intersection.v, intersection.p);
                 Some((albedo * f, pdf))
             }
+            Material::Principled(principled) => principled.eval(wo, wi, intersection),
             _ => None,
+        }
+    }
+
+    /// Sampling density of the non-delta lobes over the whole sphere, for
+    /// tests of pdf normalisation.
+    pub fn pdf_over_sphere(&self, wo: Vec3, wi: Vec3, intersection: &Intersection) -> f64 {
+        let normal = intersection.facing_normal(wo);
+        match self {
+            Material::Principled(principled) => {
+                let base = principled
+                    .base_color
+                    .value(intersection.u, intersection.v, intersection.p);
+                principled.pdf_over_sphere(wo, wi, normal, base)
+            }
+            Material::Metal(metal) if metal.fuzz >= ggx::MIN_ALPHA => {
+                ggx::pdf(metal.fuzz, wo, wi, normal)
+            }
+            Material::Lambertian(_) => wi.dot(normal).max(0.0) / std::f64::consts::PI,
+            _ => 0.0,
         }
     }
 
@@ -119,6 +154,7 @@ impl Material {
             Material::Metal(metal) => metal.scatter(ray, intersection, uniforms),
             Material::Dielectric(dielectric) => dielectric.scatter(ray, intersection, uniforms),
             Material::DiffuseLight(light) => light.scatter(ray, intersection, uniforms),
+            Material::Principled(principled) => principled.scatter(ray, intersection, uniforms),
         }
     }
 }

@@ -122,7 +122,7 @@ impl GPUScene {
         let mut light_shapes = Vec::new();
         let mut powers = Vec::new();
         for (i, shape) in shapes.iter().enumerate() {
-            if let Material::DiffuseLight(_) = shape.material() {
+            if shape.material().is_emissive() {
                 let (center, area) = match shape {
                     GPUShape::Sphere(s) => (s.center, 4.0 * std::f64::consts::PI * s.radius * s.radius),
                     GPUShape::Disc(d) => (d.center, std::f64::consts::PI * d.radius * d.radius),

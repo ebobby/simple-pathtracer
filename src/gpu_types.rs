@@ -6,7 +6,7 @@
 use bytemuck::{Pod, Zeroable};
 
 use crate::camera::Camera;
-use crate::material::{Dielectric, DiffuseLight, Lambertian, Metal};
+use crate::material::{Dielectric, DiffuseLight, Lambertian, Metal, Principled};
 use crate::texture::{Checker, ConstantColor};
 use crate::Color;
 use crate::Material;
@@ -129,57 +129,78 @@ pub const MATERIAL_LAMBERTIAN: u32 = 0;
 pub const MATERIAL_METAL: u32 = 1;
 pub const MATERIAL_DIELECTRIC: u32 = 2;
 pub const MATERIAL_DIFFUSE_LIGHT: u32 = 3;
+pub const MATERIAL_PRINCIPLED: u32 = 4;
 
-/// GPU-compatible material representation.
-/// Must be 32 bytes to match WGSL array stride (16-byte alignment of vec4).
+/// GPU-compatible material representation, 64 bytes to match the WGSL struct.
+/// `emission` is the emitted radiance for lights and principled materials.
+/// For principled materials `fuzz` holds the roughness.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct GPUMaterial {
     pub color: GPUVec3,
+    pub emission: GPUVec3,
     pub material_type: u32,
     pub fuzz: f32,
     pub ior: f32,
-    pub _pad: f32, // 4 bytes padding to reach 32 bytes total
+    pub metallic: f32,
+    pub transmission: f32,
+    pub _pad: [f32; 3],
 }
 
 impl GPUMaterial {
-    pub fn lambertian(color: GPUVec3) -> Self {
+    fn base(color: GPUVec3, material_type: u32) -> Self {
         Self {
             color,
-            material_type: MATERIAL_LAMBERTIAN,
+            emission: GPUVec3::zero(),
+            material_type,
             fuzz: 0.0,
             ior: 1.0,
-            _pad: 0.0,
+            metallic: 0.0,
+            transmission: 0.0,
+            _pad: [0.0; 3],
         }
+    }
+
+    pub fn lambertian(color: GPUVec3) -> Self {
+        Self::base(color, MATERIAL_LAMBERTIAN)
     }
 
     pub fn metal(color: GPUVec3, fuzz: f32) -> Self {
         Self {
-            color,
-            material_type: MATERIAL_METAL,
             fuzz,
-            ior: 1.0,
-            _pad: 0.0,
+            ..Self::base(color, MATERIAL_METAL)
         }
     }
 
     pub fn dielectric(color: GPUVec3, ior: f32) -> Self {
         Self {
-            color,
-            material_type: MATERIAL_DIELECTRIC,
-            fuzz: 0.0,
             ior,
-            _pad: 0.0,
+            ..Self::base(color, MATERIAL_DIELECTRIC)
         }
     }
 
     pub fn diffuse_light(color: GPUVec3) -> Self {
         Self {
-            color,
-            material_type: MATERIAL_DIFFUSE_LIGHT,
-            fuzz: 0.0,
-            ior: 1.0,
-            _pad: 0.0,
+            emission: color,
+            ..Self::base(color, MATERIAL_DIFFUSE_LIGHT)
+        }
+    }
+
+    pub fn principled(
+        color: GPUVec3,
+        emission: GPUVec3,
+        roughness: f32,
+        ior: f32,
+        metallic: f32,
+        transmission: f32,
+    ) -> Self {
+        Self {
+            emission,
+            fuzz: roughness,
+            ior,
+            metallic,
+            transmission,
+            ..Self::base(color, MATERIAL_PRINCIPLED)
         }
     }
 }
@@ -225,6 +246,21 @@ impl From<&Material> for GPUMaterial {
             Material::DiffuseLight(DiffuseLight { texture }) => {
                 GPUMaterial::diffuse_light(texture_to_color(texture))
             }
+            Material::Principled(Principled {
+                base_color,
+                metallic,
+                roughness,
+                transmission,
+                ior,
+                emission,
+            }) => GPUMaterial::principled(
+                texture_to_color(base_color),
+                (*emission).into(),
+                *roughness as f32,
+                *ior as f32,
+                *metallic as f32,
+                *transmission as f32,
+            ),
         }
     }
 }

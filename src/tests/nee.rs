@@ -77,6 +77,15 @@ fn nee_and_bsdf_only_agree_on_mean_brightness() {
             radius: 0.7,
             material: Material::metal(Texture::constant_color(Color::new(0.9, 0.9, 0.9)), 0.2),
         }),
+        Box::new(Sphere {
+            center: Vec3::new(-2.5, 0.8, 1.5),
+            radius: 0.8,
+            material: Material::Principled(
+                crate::material::Principled::new(Texture::constant_color(Color::new(0.2, 0.6, 0.9)))
+                    .metallic(0.5)
+                    .roughness(0.3),
+            ),
+        }),
         // Small sphere light and a tilted disc light
         Box::new(Sphere {
             center: Vec3::new(-2.0, 4.0, 1.0),

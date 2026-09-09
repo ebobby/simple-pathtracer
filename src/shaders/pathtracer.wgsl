@@ -59,12 +59,19 @@ const MATERIAL_METAL: u32 = 1u;
 const MATERIAL_DIELECTRIC: u32 = 2u;
 const MATERIAL_DIFFUSE_LIGHT: u32 = 3u;
 
+const MATERIAL_PRINCIPLED: u32 = 4u;
+
 struct Material {
     color: vec4<f32>,
+    emission: vec4<f32>,
     material_type: u32,
-    fuzz: f32,
+    fuzz: f32, // GGX roughness for metal (as alpha) and principled (as roughness)
     ior: f32,
-    _pad: f32,
+    metallic: f32,
+    transmission: f32,
+    _pad0: f32,
+    _pad1: f32,
+    _pad2: f32,
 }
 
 struct Ray {
@@ -186,7 +193,7 @@ const SLOT_PIXEL: u32 = 0u;
 // First slot of a bounce: BSDF direction, light sample, then
 // (light selection / fuzz radius / Fresnel, Russian roulette).
 fn bounce_slot(bounce: u32) -> u32 {
-    return 1u + 3u * bounce;
+    return 1u + 4u * bounce;
 }
 
 // Build orthonormal basis from normal (Duff et al. 2017)
@@ -399,12 +406,16 @@ fn intersect_bvh(ray: Ray) -> HitRecord {
 
 const GGX_MIN_ALPHA: f32 = 1e-3;
 
-fn ggx_distribution(cos_h: f32, alpha: f32) -> f32 {
+// D(h) with sin^2 from |h x n|^2, which stays accurate near the normal.
+fn ggx_distribution(h: vec3<f32>, normal: vec3<f32>, alpha: f32) -> f32 {
+    let cos_h = dot(h, normal);
     if cos_h <= 0.0 {
         return 0.0;
     }
     let a2 = alpha * alpha;
-    let t = cos_h * cos_h * (a2 - 1.0) + 1.0;
+    let c = cross(h, normal);
+    let sin2_h = dot(c, c);
+    let t = a2 * cos_h * cos_h + sin2_h;
     return a2 / (PI * t * t);
 }
 
@@ -453,7 +464,7 @@ fn ggx_pdf(alpha: f32, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> f32 {
     if dot(wo, h) <= 0.0 {
         return 0.0;
     }
-    return ggx_g1(cos_o, alpha) * ggx_distribution(dot(h, normal), alpha) / (4.0 * cos_o);
+    return ggx_g1(cos_o, alpha) * ggx_distribution(h, normal, alpha) / (4.0 * cos_o);
 }
 
 // BRDF value without albedo (x) and pdf (y); both zero when invalid.
@@ -467,13 +478,69 @@ fn ggx_eval(alpha: f32, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> vec2
     if dot(wo, h) <= 0.0 {
         return vec2<f32>(0.0);
     }
-    let d = ggx_distribution(dot(h, normal), alpha);
+    let d = ggx_distribution(h, normal, alpha);
     let f = d * ggx_g2(cos_o, cos_i, alpha) / (4.0 * cos_o * cos_i);
     return vec2<f32>(f, ggx_pdf(alpha, wo, wi, normal));
 }
 
+// ---- Principled material (mirrors src/material/principled.rs) ----
+
+fn principled_alpha(material: Material) -> f32 {
+    return max(material.fuzz * material.fuzz, GGX_MIN_ALPHA);
+}
+
+fn principled_f0(material: Material, base: vec3<f32>) -> vec3<f32> {
+    let d = (material.ior - 1.0) / (material.ior + 1.0);
+    return mix(vec3<f32>(d * d), base, material.metallic);
+}
+
+fn fresnel_schlick(f0: vec3<f32>, cos_theta: f32) -> vec3<f32> {
+    let w = pow(1.0 - clamp(cos_theta, 0.0, 1.0), 5.0);
+    return f0 + (vec3<f32>(1.0) - f0) * w;
+}
+
+fn average3(c: vec3<f32>) -> f32 {
+    return (c.x + c.y + c.z) / 3.0;
+}
+
+fn principled_p_transmit(material: Material) -> f32 {
+    return (1.0 - material.metallic) * material.transmission;
+}
+
+fn principled_p_specular(material: Material, f0: vec3<f32>, cos_o: f32) -> f32 {
+    return material.metallic + (1.0 - material.metallic) * average3(fresnel_schlick(f0, cos_o));
+}
+
+// Opaque-branch BRDF (rgb) and mixture pdf (w), scaled by the branch
+// probability; zero when either direction is below the facing normal.
+fn principled_eval_opaque(material: Material, wo: vec3<f32>, wi: vec3<f32>, n: vec3<f32>) -> vec4<f32> {
+    let cos_o = dot(wo, n);
+    let cos_i = dot(wi, n);
+    if cos_o <= 0.0 || cos_i <= 0.0 {
+        return vec4<f32>(0.0);
+    }
+    let base = material.color.xyz;
+    let alpha = principled_alpha(material);
+    let f0 = principled_f0(material, base);
+    let e = ggx_eval(alpha, wo, wi, n);
+    if e.y <= 0.0 {
+        return vec4<f32>(0.0);
+    }
+    let h = normalize(wo + wi);
+    let fresnel_h = fresnel_schlick(f0, dot(wo, h));
+    let fresnel_avg = average3(fresnel_schlick(f0, cos_o));
+    let diffuse_weight = (1.0 - material.metallic) * (1.0 - fresnel_avg);
+
+    let f = fresnel_h * e.x + base * (diffuse_weight / PI);
+    let p_spec = principled_p_specular(material, f0, cos_o);
+    let pdf = p_spec * e.y + (1.0 - p_spec) * cos_i / PI;
+    let p_opaque = 1.0 - principled_p_transmit(material);
+    return vec4<f32>(f * p_opaque, pdf * p_opaque);
+}
+
 // BRDF value (rgb) and pdf (w) for reflecting wo into wi at hit; pdf is zero
-// for delta materials and for directions below the surface.
+// for delta materials and for directions below the surface. `normal` must
+// already face wo.
 fn bsdf_eval(material: Material, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>) -> vec4<f32> {
     switch material.material_type {
         case MATERIAL_LAMBERTIAN: {
@@ -489,6 +556,9 @@ fn bsdf_eval(material: Material, wo: vec3<f32>, wi: vec3<f32>, normal: vec3<f32>
             }
             let e = ggx_eval(material.fuzz, wo, wi, normal);
             return vec4<f32>(material.color.xyz * e.x, e.y);
+        }
+        case MATERIAL_PRINCIPLED: {
+            return principled_eval_opaque(material, wo, wi, normal);
         }
         default: {
             return vec4<f32>(0.0);
@@ -518,44 +588,50 @@ fn schlick(cosine: f32, ref_idx: f32) -> f32 {
 }
 
 // u: two uniforms for the direction and one for a scalar decision
-fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>) -> ScatterResult {
+// u: two uniforms for a microfacet/primary direction and one scalar choice;
+// u2: two uniforms for a secondary direction (principled diffuse lobe).
+fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>, u2: vec2<f32>) -> ScatterResult {
     var result: ScatterResult;
     result.valid = false;
     result.non_delta = false;
     result.pdf = 0.0;
 
-    // Offset origin along normal to prevent self-intersection
-    let offset_origin = hit.p + hit.normal * 0.001;
+    let wo = -normalize(ray.direction);
+    // Reflection lobes shade with the normal facing the viewer
+    let entering = dot(wo, hit.normal) >= 0.0;
+    let n = select(-hit.normal, hit.normal, entering);
+
+    // Offset origin along the facing normal to prevent self-intersection
+    let offset_origin = hit.p + n * 0.001;
 
     switch material.material_type {
         case MATERIAL_LAMBERTIAN: {
             // Cosine-weighted diffuse scattering (matches CPU implementation)
-            let direction = random_cosine_direction(hit.normal, u.x, u.y);
+            let direction = random_cosine_direction(n, u.x, u.y);
             result.ray = Ray(offset_origin, direction);
             result.attenuation = material.color.xyz;
-            result.pdf = max(dot(direction, hit.normal), 0.0) / PI;
+            result.pdf = max(dot(direction, n), 0.0) / PI;
             result.non_delta = true;
             result.valid = true;
         }
         case MATERIAL_METAL: {
             // fuzz is the GGX roughness; below GGX_MIN_ALPHA it is a mirror
-            let wo = -normalize(ray.direction);
             if material.fuzz < GGX_MIN_ALPHA {
-                let reflected = reflect(-wo, hit.normal);
-                if dot(reflected, hit.normal) > 0.0 {
+                let reflected = reflect(-wo, n);
+                if dot(reflected, n) > 0.0 {
                     result.ray = Ray(offset_origin, reflected);
                     result.attenuation = material.color.xyz;
                     result.valid = true;
                 }
             } else {
-                let cos_o = dot(wo, hit.normal);
+                let cos_o = dot(wo, n);
                 if cos_o > 0.0 {
-                    let onb = build_onb(hit.normal);
+                    let onb = build_onb(n);
                     let wo_local = vec3<f32>(dot(wo, onb[0]), dot(wo, onb[1]), cos_o);
                     let h = onb * ggx_sample_visible_normal(wo_local, material.fuzz, u.x, u.y);
                     let wi = h * (2.0 * dot(wo, h)) - wo;
-                    let cos_i = dot(wi, hit.normal);
-                    let e = ggx_eval(material.fuzz, wo, wi, hit.normal);
+                    let cos_i = dot(wi, n);
+                    let e = ggx_eval(material.fuzz, wo, wi, n);
                     if cos_i > 0.0 && e.y > 0.0 {
                         result.ray = Ray(offset_origin, wi);
                         // f * cos / pdf, which for visible-normal sampling is G2 / G1
@@ -608,6 +684,87 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material, u: vec3<f32>) -> Scatte
         case MATERIAL_DIFFUSE_LIGHT: {
             // Lights don't scatter
             result.valid = false;
+        }
+        case MATERIAL_PRINCIPLED: {
+            let cos_o = dot(wo, n);
+            if cos_o <= 0.0 {
+                return result;
+            }
+            let base = material.color.xyz;
+            let alpha = principled_alpha(material);
+            let f0 = principled_f0(material, base);
+            let onb = build_onb(n);
+            let wo_local = vec3<f32>(dot(wo, onb[0]), dot(wo, onb[1]), cos_o);
+
+            let p_transmit = principled_p_transmit(material);
+            var choice = u.z;
+
+            if choice < p_transmit {
+                // Glass branch: Fresnel reflection or refraction about a
+                // sampled microfacet normal, treated as delta for MIS.
+                choice = choice / p_transmit;
+                let h = onb * ggx_sample_visible_normal(wo_local, alpha, u.x, u.y);
+                let cos_oh = dot(wo, h);
+                let fresnel = fresnel_schlick(f0, cos_oh);
+                let fresnel_avg = average3(fresnel);
+                let eta = select(material.ior, 1.0 / material.ior, entering);
+                let sin2_t = eta * eta * (1.0 - cos_oh * cos_oh);
+                let tir = sin2_t >= 1.0;
+
+                if tir || choice < fresnel_avg {
+                    let wi = h * (2.0 * cos_oh) - wo;
+                    let cos_i = dot(wi, n);
+                    if cos_i <= 0.0 {
+                        return result;
+                    }
+                    let weight = ggx_g2(cos_o, cos_i, alpha) / ggx_g1(cos_o, alpha);
+                    var tint = fresnel / fresnel_avg;
+                    if tir {
+                        tint = vec3<f32>(1.0);
+                    }
+                    result.ray = Ray(offset_origin, wi);
+                    result.attenuation = tint * weight;
+                    result.valid = true;
+                    return result;
+                }
+
+                let cos_t = sqrt(1.0 - sin2_t);
+                let wi = -wo * eta + h * (eta * cos_oh - cos_t);
+                let cos_i = -dot(wi, n);
+                if cos_i <= 0.0 {
+                    return result;
+                }
+                let weight = ggx_g2(cos_o, cos_i, alpha) / ggx_g1(cos_o, alpha);
+                let tint = (vec3<f32>(1.0) - fresnel) / (1.0 - fresnel_avg);
+                result.ray = Ray(hit.p - n * 0.001, wi);
+                result.attenuation = tint * weight;
+                result.valid = true;
+                return result;
+            }
+
+            // Opaque branch: specular or diffuse lobe, weighted by f cos / pdf
+            choice = (choice - p_transmit) / (1.0 - p_transmit);
+            let p_spec = principled_p_specular(material, f0, cos_o);
+            var wi: vec3<f32>;
+            if choice < p_spec {
+                let h = onb * ggx_sample_visible_normal(wo_local, alpha, u.x, u.y);
+                wi = h * (2.0 * dot(wo, h)) - wo;
+            } else {
+                wi = random_cosine_direction(n, u2.x, u2.y);
+            }
+            let cos_i = dot(wi, n);
+            if cos_i <= 0.0 {
+                return result;
+            }
+            let e = principled_eval_opaque(material, wo, wi, n);
+            if e.w <= 0.0 {
+                return result;
+            }
+            result.ray = Ray(offset_origin, wi);
+            result.attenuation = e.xyz * (cos_i / e.w);
+            result.pdf = e.w;
+            result.non_delta = true;
+            result.valid = true;
         }
         default: {
             result.valid = false;
@@ -748,19 +905,20 @@ fn sample_direct_light(hit: HitRecord, material: Material, wo: vec3<f32>, full_w
     if !ls.valid {
         return vec3<f32>(0.0);
     }
-    let cos_theta = dot(ls.direction, hit.normal);
-    let bsdf = bsdf_eval(material, wo, ls.direction, hit.normal);
+    let n = select(-hit.normal, hit.normal, dot(wo, hit.normal) >= 0.0);
+    let cos_theta = dot(ls.direction, n);
+    let bsdf = bsdf_eval(material, wo, ls.direction, n);
     if bsdf.w <= 0.0 {
         return vec3<f32>(0.0);
     }
 
-    let shadow_ray = Ray(hit.p + hit.normal * 0.001, ls.direction);
+    let shadow_ray = Ray(hit.p + n * 0.001, ls.direction);
     let shadow_hit = intersect_bvh(shadow_ray);
     if !shadow_hit.valid || shadow_hit.shape_idx != light_shape {
         return vec3<f32>(0.0);
     }
 
-    let emitted = materials[shadow_hit.material_idx].color.xyz;
+    let emitted = materials[shadow_hit.material_idx].emission.xyz;
     let pdf_light = ls.pdf * light.select_pdf;
     var weight = 1.0;
     if !full_weight {
@@ -797,15 +955,25 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
 
         let material = materials[hit.material_idx];
 
-        // Add emission from lights
-        if material.material_type == MATERIAL_DIFFUSE_LIGHT {
+        // Beer-Lambert absorption when leaving a transmissive principled object
+        if material.material_type == MATERIAL_PRINCIPLED && material.transmission > 0.0
+            && dot(ray.direction, hit.normal) > 0.0 {
+            throughput = throughput * pow(max(material.color.xyz, vec3<f32>(0.0)), vec3<f32>(hit.t));
+        }
+
+        // Add emission
+        let emitted = material.emission.xyz;
+        if emitted.x > 0.0 || emitted.y > 0.0 || emitted.z > 0.0 {
             var weight = 1.0;
             if use_nee && !prev_specular {
                 let direction = normalize(ray.direction);
                 let pdf_light = light_pdf(hit.shape_idx, ray.origin, hit.p, direction) * light_select_pdf(hit.shape_idx);
                 weight = power_heuristic(prev_pdf, pdf_light);
             }
-            color = color + throughput * material.color.xyz * weight;
+            color = color + throughput * emitted * weight;
+        }
+        if material.material_type == MATERIAL_DIFFUSE_LIGHT {
+            // Lights don't scatter
             break;
         }
 
@@ -815,13 +983,17 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
         let u_bsdf = sample_2d(slot);
         var u_scalar = vec2<f32>(0.0);
         var have_scalar = false;
-        if material.material_type == MATERIAL_DIELECTRIC {
+        var u_secondary = vec2<f32>(0.0);
+        if material.material_type == MATERIAL_DIELECTRIC || material.material_type == MATERIAL_PRINCIPLED {
             u_scalar = sample_2d(slot + 2u);
             have_scalar = true;
         }
+        if material.material_type == MATERIAL_PRINCIPLED {
+            u_secondary = sample_2d(slot + 3u);
+        }
 
         // Scatter ray
-        let scattered = scatter(ray, hit, material, vec3<f32>(u_bsdf, u_scalar.x));
+        let scattered = scatter(ray, hit, material, vec3<f32>(u_bsdf, u_scalar.x), u_secondary);
         if !scattered.valid {
             break;
         }

@@ -111,10 +111,10 @@ impl Sampler {
 /// Pair slot layout along a path.
 pub const SLOT_PIXEL: u32 = 0;
 
-/// First slot of bounce `bounce` (0-based). Each bounce uses three slots:
-/// BSDF direction, light sample, and (light selection / fuzz radius /
-/// Fresnel, Russian roulette).
+/// First slot of bounce `bounce` (0-based). Each bounce uses four slots:
+/// BSDF direction, light sample, (light selection / lobe choice / Fresnel,
+/// Russian roulette), and a secondary BSDF direction.
 #[inline]
 pub fn bounce_slot(bounce: u32) -> u32 {
-    1 + 3 * bounce
+    1 + 4 * bounce
 }

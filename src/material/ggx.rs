@@ -7,13 +7,16 @@ use std::f64::consts::PI;
 /// Roughness below this is treated as a perfect mirror.
 pub const MIN_ALPHA: f64 = 1e-3;
 
-/// Normal distribution D(h) for a half vector with cosine `cos_h` to the normal.
-fn distribution(cos_h: f64, alpha: f64) -> f64 {
+/// Normal distribution D(h). Uses `sin²θ_h = |h × n|²` rather than
+/// `1 - cos²θ_h`, which cancels catastrophically near the normal for small α.
+fn distribution(h: Vec3, normal: Vec3, alpha: f64) -> f64 {
+    let cos_h = h.dot(normal);
     if cos_h <= 0.0 {
         return 0.0;
     }
     let a2 = alpha * alpha;
-    let t = cos_h * cos_h * (a2 - 1.0) + 1.0;
+    let sin2_h = h.cross(normal).norm();
+    let t = a2 * cos_h * cos_h + sin2_h;
     a2 / (PI * t * t)
 }
 
@@ -24,11 +27,11 @@ fn lambda(cos: f64, alpha: f64) -> f64 {
     (-1.0 + (1.0 + alpha * alpha * tan2).sqrt()) * 0.5
 }
 
-fn g1(cos: f64, alpha: f64) -> f64 {
+pub fn g1(cos: f64, alpha: f64) -> f64 {
     1.0 / (1.0 + lambda(cos, alpha))
 }
 
-fn g2(cos_o: f64, cos_i: f64, alpha: f64) -> f64 {
+pub fn g2(cos_o: f64, cos_i: f64, alpha: f64) -> f64 {
     1.0 / (1.0 + lambda(cos_o, alpha) + lambda(cos_i, alpha))
 }
 
@@ -71,7 +74,7 @@ pub fn pdf(alpha: f64, wo: Vec3, wi: Vec3, normal: Vec3) -> f64 {
     if wo.dot(h) <= 0.0 {
         return 0.0;
     }
-    g1(cos_o, alpha) * distribution(h.dot(normal), alpha) / (4.0 * cos_o)
+    g1(cos_o, alpha) * distribution(h, normal, alpha) / (4.0 * cos_o)
 }
 
 /// BRDF value without the albedo factor, and the visible-normal-sampling pdf,
@@ -88,7 +91,7 @@ pub fn eval(alpha: f64, wo: Vec3, wi: Vec3, normal: Vec3) -> Option<(f64, f64)> 
         return None;
     }
 
-    let d = distribution(h.dot(normal), alpha);
+    let d = distribution(h, normal, alpha);
     let f = d * g2(cos_o, cos_i, alpha) / (4.0 * cos_o * cos_i);
     Some((f, pdf(alpha, wo, wi, normal)))
 }

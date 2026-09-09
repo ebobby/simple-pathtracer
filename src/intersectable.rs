@@ -40,3 +40,16 @@ pub struct Intersection<'a> {
     pub material: &'a Material,
     pub shape_id: usize,
 }
+
+impl Intersection<'_> {
+    /// The normal flipped, if needed, to face the direction `wo` towards the
+    /// viewer. Reflection lobes shade with this so back-facing surfaces work.
+    #[inline]
+    pub fn facing_normal(&self, wo: Vec3) -> Vec3 {
+        if wo.dot(self.normal) < 0.0 {
+            -self.normal
+        } else {
+            self.normal
+        }
+    }
+}

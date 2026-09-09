@@ -28,7 +28,7 @@ pub use gpu::GPUScene;
 pub use gpu::GPUShape;
 pub use gpu_types::*;
 pub use light::{Light, LightShape};
-pub use material::Material;
+pub use material::{Material, Principled};
 pub use sampler::Sampler;
 pub use scene::Scene;
 pub use texture::Texture;
@@ -296,6 +296,14 @@ fn radiance_with(
             break;
         };
 
+        // Beer-Lambert absorption when leaving the inside of a transmissive
+        // principled object.
+        if let Material::Principled(principled) = intersection.material {
+            if principled.transmission > 0.0 && ray.direction.dot(intersection.normal) > 0.0 {
+                throughput = throughput * principled.transmittance(intersection.t, &intersection);
+            }
+        }
+
         let emitted = intersection
             .material
             .emit(intersection.u, intersection.v, intersection.p);
@@ -321,17 +329,32 @@ fn radiance_with(
         // only generated when something consumes it.
         let slot = sampler::bounce_slot(depth - 1);
         let u_bsdf = sampler.get_2d(slot);
-        let needs_scalar = matches!(intersection.material, Material::Dielectric(_));
+        let (needs_scalar, needs_secondary) = match intersection.material {
+            Material::Dielectric(_) => (true, false),
+            Material::Principled(_) => (true, true),
+            _ => (false, false),
+        };
         let mut u_scalar = if needs_scalar {
             Some(sampler.get_2d(slot + 2))
         } else {
             None
         };
+        let u_secondary = if needs_secondary {
+            sampler.get_2d(slot + 3)
+        } else {
+            (0.0, 0.0)
+        };
 
         let Some(scattered) = intersection.material.scatter(
             &ray,
             &intersection,
-            [u_bsdf.0, u_bsdf.1, u_scalar.map_or(0.0, |u| u.0)],
+            [
+                u_bsdf.0,
+                u_bsdf.1,
+                u_scalar.map_or(0.0, |u| u.0),
+                u_secondary.0,
+                u_secondary.1,
+            ],
         ) else {
             break;
         };
@@ -405,7 +428,7 @@ fn sample_direct_light(
     let Some(sample) = light.sample(intersection.p, u_light.0, u_light.1) else {
         return Color::new(0.0, 0.0, 0.0);
     };
-    let cos_theta = sample.direction.dot(intersection.normal);
+    let cos_theta = sample.direction.dot(intersection.facing_normal(wo));
     let Some((f, pdf_bsdf)) = intersection
         .material
         .eval(wo, sample.direction, intersection)

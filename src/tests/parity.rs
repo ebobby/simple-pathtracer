@@ -34,6 +34,24 @@ fn shapes() -> (Vec<Sphere>, Vec<Disc>) {
             radius: 1.0,
             material: Material::dielectric(Texture::constant_color(Color::new(1.0, 1.0, 1.0)), 1.5),
         },
+        Sphere {
+            center: Vec3::new(0.0, 0.6, 2.5),
+            radius: 0.6,
+            material: Material::Principled(
+                crate::material::Principled::new(Texture::constant_color(Color::new(0.9, 0.4, 0.2)))
+                    .metallic(0.6)
+                    .roughness(0.35),
+            ),
+        },
+        Sphere {
+            center: Vec3::new(-1.6, 0.5, 2.2),
+            radius: 0.5,
+            material: Material::Principled(
+                crate::material::Principled::new(Texture::constant_color(Color::new(0.8, 0.9, 1.0)))
+                    .transmission(1.0)
+                    .roughness(0.15),
+            ),
+        },
     ];
     let discs = vec![Disc {
         center: Vec3::new(0.0, 6.0, 0.0),

@@ -24,8 +24,8 @@ impl Scatterable for Metal {
         intersection: &Intersection,
         uniforms: ScatterUniforms,
     ) -> Option<Scattered> {
-        let normal = intersection.normal;
         let wo = -ray.direction.normalize();
+        let normal = intersection.facing_normal(wo);
         let albedo = self
             .albedo
             .value(intersection.u, intersection.v, intersection.p);

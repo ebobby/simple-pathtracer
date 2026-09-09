@@ -36,7 +36,7 @@ fn ggx_sampled_direction_pdf_matches_eval() {
     let mut checked = 0;
     for i in 0..500 {
         let (u1, u2) = Sampler::new(11, i).get_2d(0);
-        let Some(scattered) = material.scatter(&incoming, &hit, [u1, u2, 0.5]) else {
+        let Some(scattered) = material.scatter(&incoming, &hit, [u1, u2, 0.5, 0.0, 0.0]) else {
             continue;
         };
         let wi = scattered.scattered.direction.normalize();
@@ -88,7 +88,7 @@ fn smooth_metal_is_a_delta_reflection() {
         origin: Vec3::new(0.0, 1.0, 1.0),
         direction: Vec3::new(0.0, -1.0, -1.0),
     };
-    let scattered = material.scatter(&incoming, &hit, [0.3, 0.7, 0.1]).unwrap();
+    let scattered = material.scatter(&incoming, &hit, [0.3, 0.7, 0.1, 0.0, 0.0]).unwrap();
     assert!(scattered.pdf.is_none());
     let d = scattered.scattered.direction.normalize();
     let expected = Vec3::new(0.0, 1.0, -1.0).normalize();

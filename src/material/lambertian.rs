@@ -17,13 +17,13 @@ impl Scatterable for Lambertian {
 
     fn scatter(
         &self,
-        _ray: &Ray,
+        ray: &Ray,
         intersection: &Intersection,
         uniforms: ScatterUniforms,
     ) -> Option<Scattered> {
-        let direction =
-            super::random_cosine_direction(intersection.normal, uniforms[0], uniforms[1]);
-        let pdf = direction.dot(intersection.normal).max(0.0) / std::f64::consts::PI;
+        let normal = intersection.facing_normal(-ray.direction);
+        let direction = super::random_cosine_direction(normal, uniforms[0], uniforms[1]);
+        let pdf = direction.dot(normal).max(0.0) / std::f64::consts::PI;
 
         let scattered = Ray {
             origin: intersection.p,
