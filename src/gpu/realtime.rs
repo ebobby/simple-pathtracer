@@ -209,6 +209,7 @@ struct RealtimeApp {
     spheres_buffer: Option<wgpu::Buffer>,
     discs_buffer: Option<wgpu::Buffer>,
     materials_buffer: Option<wgpu::Buffer>,
+    lights_buffer: Option<wgpu::Buffer>,
     output_buffer: Option<wgpu::Buffer>,
     pathtracer_bind_group: Option<wgpu::BindGroup>,
 
@@ -256,6 +257,7 @@ impl RealtimeApp {
             spheres_buffer: None,
             discs_buffer: None,
             materials_buffer: None,
+            lights_buffer: None,
             output_buffer: None,
             pathtracer_bind_group: None,
             blit_params_buffer: None,
@@ -333,9 +335,10 @@ impl RealtimeApp {
         let camera = self.initial_camera.as_ref().unwrap();
         let scene = GPUScene::build(shapes, camera);
         println!(
-            "Scene: {} spheres, {} discs, {} materials, {} BVH nodes",
+            "Scene: {} spheres, {} discs, {} lights, {} materials, {} BVH nodes",
             scene.num_spheres,
             scene.num_discs,
+            scene.lights.len(),
             scene.materials.len(),
             scene.bvh_nodes.len()
         );
@@ -550,6 +553,17 @@ impl RealtimeApp {
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+        let lights_data = if scene.lights.is_empty() {
+            vec![0u32]
+        } else {
+            scene.lights.clone()
+        };
+        let lights_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Lights Buffer"),
+            contents: bytemuck::cast_slice(&lights_data),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
             size: output_size,
@@ -590,6 +604,10 @@ impl RealtimeApp {
                     binding: 6,
                     resource: output_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 7,
+                    resource: lights_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -618,6 +636,7 @@ impl RealtimeApp {
         self.spheres_buffer = Some(spheres_buffer);
         self.discs_buffer = Some(discs_buffer);
         self.materials_buffer = Some(materials_buffer);
+        self.lights_buffer = Some(lights_buffer);
         self.output_buffer = Some(output_buffer);
         self.pathtracer_bind_group = Some(pathtracer_bind_group);
         self.blit_params_buffer = Some(blit_params_buffer);
@@ -739,7 +758,7 @@ impl RealtimeApp {
             frame_seed: self.frame_count as u32,
             num_spheres: scene.num_spheres,
             num_discs: scene.num_discs,
-            _pad: 0,
+            num_lights: scene.lights.len() as u32,
         };
         queue.write_buffer(
             self.params_buffer.as_ref().unwrap(),
@@ -908,6 +927,10 @@ impl RealtimeApp {
                     wgpu::BindGroupEntry {
                         binding: 6,
                         resource: output_buffer.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 7,
+                        resource: self.lights_buffer.as_ref().unwrap().as_entire_binding(),
                     },
                 ],
             });

@@ -1,9 +1,5 @@
 //! GPU context and pipeline setup using wgpu.
 
-use wgpu::util::DeviceExt;
-
-use crate::gpu_types::*;
-use super::scene::GPUScene;
 
 /// GPU context holding device and queue.
 pub struct GPUContext {
@@ -144,6 +140,17 @@ impl GPUPipeline {
                     },
                     count: None,
                 },
+                // Light shape indices storage
+                wgpu::BindGroupLayoutEntry {
+                    binding: 7,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -168,119 +175,6 @@ impl GPUPipeline {
         }
     }
 
-    /// Create buffers and bind group for rendering.
-    pub fn create_bind_group(
-        &self,
-        device: &wgpu::Device,
-        scene: &GPUScene,
-        params: &GPURenderParams,
-        width: u32,
-        height: u32,
-    ) -> (wgpu::BindGroup, wgpu::Buffer) {
-        // Create uniform buffers
-        let params_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Params Buffer"),
-            contents: bytemuck::cast_slice(&[*params]),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::cast_slice(&[scene.camera]),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
-
-        // Create storage buffers
-        let bvh_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("BVH Buffer"),
-            contents: bytemuck::cast_slice(&scene.bvh_nodes),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        // Spheres buffer (need at least one element for wgpu)
-        let spheres_data = if scene.spheres.is_empty() {
-            vec![GPUSphere::new(GPUVec3::zero(), 0.0, 0)]
-        } else {
-            scene.spheres.clone()
-        };
-        let spheres_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Spheres Buffer"),
-            contents: bytemuck::cast_slice(&spheres_data),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        // Discs buffer (need at least one element)
-        let discs_data = if scene.discs.is_empty() {
-            vec![GPUDisc::new(GPUVec3::zero(), GPUVec3::new(0.0, 1.0, 0.0), 0.0, 0)]
-        } else {
-            scene.discs.clone()
-        };
-        let discs_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Discs Buffer"),
-            contents: bytemuck::cast_slice(&discs_data),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        // Materials buffer (need at least one element)
-        let materials_data = if scene.materials.is_empty() {
-            vec![GPUMaterial::lambertian(GPUVec3::new(0.5, 0.5, 0.5))]
-        } else {
-            scene.materials.clone()
-        };
-        let materials_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Materials Buffer"),
-            contents: bytemuck::cast_slice(&materials_data),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-
-        // Output buffer
-        let output_size = (width * height * 16) as u64; // vec4<f32> = 16 bytes
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: output_size,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
-            mapped_at_creation: false,
-        });
-
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Pathtracer Bind Group"),
-            layout: &self.bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: params_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: camera_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: bvh_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: spheres_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: discs_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: materials_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 6,
-                    resource: output_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-        (bind_group, output_buffer)
-    }
-
-    /// Get the compute pipeline.
     pub fn pipeline(&self) -> &wgpu::ComputePipeline {
         &self.pipeline
     }

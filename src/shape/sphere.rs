@@ -1,5 +1,6 @@
 use crate::aabb::AABB;
 use crate::intersectable::*;
+use crate::light::LightShape;
 use crate::ray::Ray;
 use crate::Material;
 use crate::Vec3;
@@ -54,7 +55,19 @@ impl Intersectable for Sphere {
             v,
             normal,
             material: &self.material,
+            shape_id: 0,
         })
+    }
+
+    fn as_light(&self) -> Option<LightShape> {
+        if matches!(self.material, Material::DiffuseLight(_)) {
+            Some(LightShape::Sphere {
+                center: self.center,
+                radius: self.radius,
+            })
+        } else {
+            None
+        }
     }
 }
 

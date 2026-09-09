@@ -30,6 +30,7 @@ impl Scatterable for Metal {
                 attenuation: self
                     .albedo
                     .value(intersection.u, intersection.v, intersection.p),
+                pdf: None,
             })
         } else {
             None

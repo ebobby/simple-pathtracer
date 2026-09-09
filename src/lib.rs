@@ -5,6 +5,7 @@ mod bvh;
 mod camera;
 mod color;
 mod intersectable;
+mod light;
 mod material;
 mod ray;
 mod rng;
@@ -25,6 +26,7 @@ pub use gpu::render_realtime;
 pub use gpu::GPUScene;
 pub use gpu::GPUShape;
 pub use gpu_types::*;
+pub use light::{Light, LightShape};
 pub use material::Material;
 pub use scene::Scene;
 pub use texture::Texture;
@@ -42,6 +44,17 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 /// Hitable is a boxed trait object that implements `Intersectable`.
 pub type Hitable = Box<dyn Intersectable + Send + Sync>;
+
+/// Which light transport estimator to use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Integrator {
+    /// Pure path tracing: lights are only found by chance. Kept as the
+    /// reference implementation.
+    BsdfOnly,
+    /// Path tracing with next event estimation and multiple importance
+    /// sampling at diffuse vertices. The default.
+    NextEventEstimation,
+}
 
 /// Tile size for tile-based rendering (16x16 pixels per tile)
 const TILE_SIZE: u32 = 16;
@@ -105,6 +118,27 @@ pub fn render_linear(
     samples: u32,
     max_depth: u32,
     workers: usize,
+) -> Vec<Color> {
+    render_linear_with(
+        scene,
+        width,
+        height,
+        samples,
+        max_depth,
+        workers,
+        Integrator::NextEventEstimation,
+    )
+}
+
+/// [`render_linear`] with an explicit choice of estimator.
+pub fn render_linear_with(
+    scene: &Scene,
+    width: u32,
+    height: u32,
+    samples: u32,
+    max_depth: u32,
+    workers: usize,
+    integrator: Integrator,
 ) -> Vec<Color> {
     // Shared linear image buffer
     let pixel_count = (width * height) as usize;
@@ -180,7 +214,8 @@ pub fn render_linear(
 
                                     let ray = scene.camera.get_ray(u, v);
 
-                                    pixel_color += radiance(scene, &ray, 1, max_depth);
+                                    pixel_color +=
+                                        radiance_with(scene, &ray, 1, max_depth, integrator);
                                 }
                             }
                         }
@@ -217,15 +252,35 @@ pub fn render_linear(
     imgbuf.into_inner().unwrap()
 }
 
-/// Estimate the radiance arriving along `ray`.
+/// Estimate the radiance arriving along `ray` with the default estimator.
 ///
 /// `depth` is the number of the surface interaction the ray is about to
 /// have (1 for camera rays); the walk stops after `max_depth` interactions.
 fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
+    radiance_with(scene, ray, depth, max_depth, Integrator::NextEventEstimation)
+}
+
+/// [`radiance`] with an explicit choice of estimator.
+fn radiance_with(
+    scene: &Scene,
+    ray: &Ray,
+    depth: u32,
+    max_depth: u32,
+    integrator: Integrator,
+) -> Color {
+    let lights = scene.world.lights();
+    let use_nee = integrator == Integrator::NextEventEstimation && !lights.is_empty();
+
     let mut ray = ray.clone();
     let mut depth = depth;
     let mut color = Color::new(0.0, 0.0, 0.0);
     let mut throughput = Color::new(1.0, 1.0, 1.0);
+
+    // How the current ray was generated: camera and specular bounces add any
+    // emission they find at full weight; diffuse bounces carry their pdf so
+    // emission can be weighted against light sampling.
+    let mut prev_specular = true;
+    let mut prev_pdf = 0.0;
 
     loop {
         let Some(intersection) = scene.world.intersect(&ray, 0.0001, f64::INFINITY) else {
@@ -235,11 +290,42 @@ fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
         let emitted = intersection
             .material
             .emit(intersection.u, intersection.v, intersection.p);
-        color += throughput * emitted;
+        if emitted.r > 0.0 || emitted.g > 0.0 || emitted.b > 0.0 {
+            let weight = if use_nee && !prev_specular {
+                match scene.world.light_of_shape(intersection.shape_id) {
+                    Some(light) => {
+                        let direction = ray.direction.normalize();
+                        let pdf_light =
+                            light.pdf(ray.origin, intersection.p, direction) / lights.len() as f64;
+                        light::power_heuristic(prev_pdf, pdf_light)
+                    }
+                    None => 1.0,
+                }
+            } else {
+                1.0
+            };
+            color += throughput * emitted * weight;
+        }
 
         let Some(scattered) = intersection.material.scatter(&ray, &intersection) else {
             break;
         };
+
+        match scattered.pdf {
+            Some(pdf) if use_nee => {
+                // At the last allowed interaction there is no BSDF-sampled
+                // continuation to share the light with, so the light sample
+                // takes full weight.
+                let last_vertex = depth >= max_depth;
+                color += throughput
+                    * sample_direct_light(scene, &intersection, scattered.attenuation, last_vertex);
+                prev_specular = false;
+                prev_pdf = pdf;
+            }
+            _ => {
+                prev_specular = true;
+            }
+        }
 
         let mut attenuation = scattered.attenuation;
 
@@ -264,6 +350,51 @@ fn radiance(scene: &Scene, ray: &Ray, depth: u32, max_depth: u32) -> Color {
     }
 
     color
+}
+
+/// Direct lighting at a Lambertian vertex with `albedo`, from one light
+/// chosen uniformly, weighted against BSDF sampling with the power heuristic
+/// unless `full_weight` says no BSDF continuation will follow.
+fn sample_direct_light(
+    scene: &Scene,
+    intersection: &Intersection,
+    albedo: Color,
+    full_weight: bool,
+) -> Color {
+    let lights = scene.world.lights();
+    let light_index = ((rng::get_random_number() * lights.len() as f64) as usize).min(lights.len() - 1);
+    let light = &lights[light_index];
+
+    let Some(sample) = light.sample(intersection.p) else {
+        return Color::new(0.0, 0.0, 0.0);
+    };
+    let cos_theta = sample.direction.dot(intersection.normal);
+    if cos_theta <= 0.0 {
+        return Color::new(0.0, 0.0, 0.0);
+    }
+
+    let shadow_ray = Ray {
+        origin: intersection.p,
+        direction: sample.direction,
+    };
+    let Some(hit) = scene.world.intersect(&shadow_ray, 0.0001, f64::INFINITY) else {
+        return Color::new(0.0, 0.0, 0.0);
+    };
+    if hit.shape_id != light.shape_id {
+        return Color::new(0.0, 0.0, 0.0);
+    }
+
+    let emitted = hit.material.emit(hit.u, hit.v, hit.p);
+    let pdf_light = sample.pdf / lights.len() as f64;
+    let pdf_bsdf = cos_theta / std::f64::consts::PI;
+    let weight = if full_weight {
+        1.0
+    } else {
+        light::power_heuristic(pdf_light, pdf_bsdf)
+    };
+
+    // f * cos / pdf with f = albedo / π
+    albedo * emitted * (cos_theta / (std::f64::consts::PI * pdf_light) * weight)
 }
 
 fn tent_filter_factor() -> f64 {

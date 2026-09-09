@@ -82,9 +82,10 @@ pub fn render_gpu_linear(
     println!("Building GPU scene...");
     let scene = GPUScene::build(shapes, camera);
     println!(
-        "Scene: {} spheres, {} discs, {} materials, {} BVH nodes",
+        "Scene: {} spheres, {} discs, {} lights, {} materials, {} BVH nodes",
         scene.num_spheres,
         scene.num_discs,
+        scene.lights.len(),
         scene.materials.len(),
         scene.bvh_nodes.len()
     );
@@ -186,6 +187,20 @@ pub fn render_gpu_linear(
             usage: wgpu::BufferUsages::STORAGE,
         });
 
+    // Storage buffers may not be empty; a dummy entry is harmless with num_lights = 0
+    let lights_data = if scene.lights.is_empty() {
+        vec![0u32]
+    } else {
+        scene.lights.clone()
+    };
+    let lights_buffer = ctx
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Lights Buffer"),
+            contents: bytemuck::cast_slice(&lights_data),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+
     // Create params buffer once (will be updated each pass)
     let params_buffer = ctx.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("Params Buffer"),
@@ -227,6 +242,10 @@ pub fn render_gpu_linear(
                 binding: 6,
                 resource: output_buffer.as_entire_binding(),
             },
+            wgpu::BindGroupEntry {
+                binding: 7,
+                resource: lights_buffer.as_entire_binding(),
+            },
         ],
     });
 
@@ -257,7 +276,7 @@ pub fn render_gpu_linear(
             frame_seed: pass, // Different seed for each pass
             num_spheres: scene.num_spheres,
             num_discs: scene.num_discs,
-            _pad: 0,
+            num_lights: scene.lights.len() as u32,
         };
         ctx.queue.write_buffer(&params_buffer, 0, bytemuck::cast_slice(&[params]));
 

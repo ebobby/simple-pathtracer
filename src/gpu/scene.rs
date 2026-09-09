@@ -58,6 +58,8 @@ pub struct GPUScene {
     pub spheres: Vec<GPUSphere>,
     pub discs: Vec<GPUDisc>,
     pub materials: Vec<GPUMaterial>,
+    /// Shape indices (spheres first, then discs) of emissive shapes.
+    pub lights: Vec<u32>,
     pub num_spheres: u32,
     pub num_discs: u32,
 }
@@ -116,6 +118,13 @@ impl GPUScene {
         let num_spheres = spheres.len() as u32;
         let num_discs = discs.len() as u32;
 
+        let lights: Vec<u32> = shapes
+            .iter()
+            .enumerate()
+            .filter(|(_, shape)| matches!(shape.material(), Material::DiffuseLight(_)))
+            .map(|(i, _)| i as u32)
+            .collect();
+
         // Build BVH
         let bvh_nodes = if shape_indices.is_empty() {
             // Empty scene - create a dummy node
@@ -132,6 +141,7 @@ impl GPUScene {
             spheres,
             discs,
             materials,
+            lights,
             num_spheres,
             num_discs,
         }

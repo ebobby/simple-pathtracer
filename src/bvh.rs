@@ -2,6 +2,7 @@
 
 use crate::aabb::AABB;
 use crate::intersectable::{Intersectable, Intersection};
+use crate::light::Light;
 use crate::ray::Ray;
 use crate::{Hitable, Vec3};
 
@@ -19,6 +20,9 @@ struct Node {
 pub struct BVH {
     nodes: Vec<Node>,
     shapes: Vec<Hitable>,
+    lights: Vec<Light>,
+    /// Index into `lights` for each shape, or `usize::MAX`.
+    light_of_shape: Vec<usize>,
 }
 
 impl BVH {
@@ -33,10 +37,34 @@ impl BVH {
 
         Self::build(&boxes, &mut order, &mut nodes);
 
+        let mut lights = Vec::new();
+        let mut light_of_shape = vec![usize::MAX; objects.len()];
+        for (shape_id, shape) in objects.iter().enumerate() {
+            if let Some(light_shape) = shape.as_light() {
+                light_of_shape[shape_id] = lights.len();
+                lights.push(Light {
+                    shape_id,
+                    shape: light_shape,
+                });
+            }
+        }
+
         Self {
             nodes,
             shapes: objects,
+            lights,
+            light_of_shape,
         }
+    }
+
+    /// All emissive shapes in the scene.
+    pub fn lights(&self) -> &[Light] {
+        &self.lights
+    }
+
+    /// The light corresponding to a shape id from an [`Intersection`], if any.
+    pub fn light_of_shape(&self, shape_id: usize) -> Option<&Light> {
+        self.lights.get(*self.light_of_shape.get(shape_id)?)
     }
 
     /// Append the subtree for `order` (a set of shape indices) to `nodes`,
@@ -125,9 +153,9 @@ impl Intersectable for BVH {
             }
 
             if node.is_leaf {
-                if let Some(hit) =
-                    self.shapes[node.child_or_shape as usize].intersect(ray, min, closest_t)
-                {
+                let shape_id = node.child_or_shape as usize;
+                if let Some(mut hit) = self.shapes[shape_id].intersect(ray, min, closest_t) {
+                    hit.shape_id = shape_id;
                     closest_t = hit.t;
                     closest = Some(hit);
                 }

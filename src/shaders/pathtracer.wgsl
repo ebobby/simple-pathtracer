@@ -13,7 +13,7 @@ struct RenderParams {
     frame_seed: u32,
     num_spheres: u32,
     num_discs: u32,
-    _pad: u32,
+    num_lights: u32,
 }
 
 struct Camera {
@@ -73,6 +73,7 @@ struct HitRecord {
     t: f32,
     normal: vec3<f32>,
     material_idx: u32,
+    shape_idx: u32,
     u: f32,
     v: f32,
     valid: bool,
@@ -81,8 +82,19 @@ struct HitRecord {
 struct ScatterResult {
     ray: Ray,
     attenuation: vec3<f32>,
+    pdf: f32,      // solid-angle pdf for diffuse scattering, 0 for specular
+    diffuse: bool,
     valid: bool,
 }
+
+struct LightSample {
+    direction: vec3<f32>, // unit direction from the shading point
+    point: vec3<f32>,     // a point on the light along direction
+    pdf: f32,             // solid-angle pdf
+    valid: bool,
+}
+
+const PI: f32 = 3.14159265359;
 
 // ============================================================================
 // Bindings
@@ -95,6 +107,7 @@ struct ScatterResult {
 @group(0) @binding(4) var<storage, read> discs: array<Disc>;
 @group(0) @binding(5) var<storage, read> materials: array<Material>;
 @group(0) @binding(6) var<storage, read_write> output: array<vec4<f32>>;
+@group(0) @binding(7) var<storage, read> lights: array<u32>; // shape indices
 
 // ============================================================================
 // Random Number Generation (PCG-based for speed)
@@ -159,7 +172,7 @@ fn random_cosine_direction(normal: vec3<f32>) -> vec3<f32> {
     let r1 = random();
     let r2 = random();
 
-    let phi = 2.0 * 3.14159265359 * r1;
+    let phi = 2.0 * PI * r1;
     let sqrt_r2 = sqrt(r2);
 
     // Local coordinates (z-up hemisphere)
@@ -263,8 +276,8 @@ fn intersect_sphere(ray: Ray, sphere: Sphere, t_min: f32, t_max: f32) -> HitReco
 
     // Compute UV coordinates (spherical mapping)
     let d = hit.normal;
-    hit.u = 0.5 + atan2(d.z, d.x) / (2.0 * 3.14159265359);
-    hit.v = 0.5 - asin(d.y) / 3.14159265359;
+    hit.u = 0.5 + atan2(d.z, d.x) / (2.0 * PI);
+    hit.v = 0.5 - asin(d.y) / PI;
 
     return hit;
 }
@@ -344,8 +357,9 @@ fn intersect_bvh(ray: Ray) -> HitRecord {
         }
 
         if node.is_leaf == 1u {
-            let hit = intersect_shape(ray, node.shape_idx, closest.t);
+            var hit = intersect_shape(ray, node.shape_idx, closest.t);
             if hit.valid && hit.t < closest.t {
+                hit.shape_idx = node.shape_idx;
                 closest = hit;
             }
         } else {
@@ -382,6 +396,8 @@ fn schlick(cosine: f32, ref_idx: f32) -> f32 {
 fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
     var result: ScatterResult;
     result.valid = false;
+    result.diffuse = false;
+    result.pdf = 0.0;
 
     // Offset origin along normal to prevent self-intersection
     let offset_origin = hit.p + hit.normal * 0.001;
@@ -389,8 +405,11 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
     switch material.material_type {
         case MATERIAL_LAMBERTIAN: {
             // Cosine-weighted diffuse scattering (matches CPU implementation)
-            result.ray = Ray(offset_origin, random_cosine_direction(hit.normal));
+            let direction = random_cosine_direction(hit.normal);
+            result.ray = Ray(offset_origin, direction);
             result.attenuation = material.color.xyz;
+            result.pdf = max(dot(direction, hit.normal), 0.0) / PI;
+            result.diffuse = true;
             result.valid = true;
         }
         case MATERIAL_METAL: {
@@ -454,6 +473,144 @@ fn scatter(ray: Ray, hit: HitRecord, material: Material) -> ScatterResult {
 }
 
 // ============================================================================
+// Light Sampling (mirrors src/light.rs)
+// ============================================================================
+
+fn power_heuristic(pdf_a: f32, pdf_b: f32) -> f32 {
+    let a = pdf_a * pdf_a;
+    let b = pdf_b * pdf_b;
+    if a + b == 0.0 {
+        return 0.0;
+    }
+    return a / (a + b);
+}
+
+// Sample a direction from p towards the light with the given shape index.
+fn light_sample(shape_idx: u32, p: vec3<f32>) -> LightSample {
+    var s: LightSample;
+    s.valid = false;
+
+    let u1 = random();
+    let u2 = random();
+    let phi = 2.0 * PI * u2;
+
+    if shape_idx < params.num_spheres {
+        let sphere = spheres[shape_idx];
+        let center = sphere.center_radius.xyz;
+        let radius = sphere.center_radius.w;
+        let to_center = center - p;
+        let dist_sq = dot(to_center, to_center);
+
+        if dist_sq <= radius * radius {
+            // Inside the sphere: every direction hits it.
+            let z = 1.0 - 2.0 * u1;
+            let r = sqrt(max(1.0 - z * z, 0.0));
+            s.direction = vec3<f32>(r * cos(phi), r * sin(phi), z);
+            s.point = p + s.direction;
+            s.pdf = 1.0 / (4.0 * PI);
+            s.valid = true;
+            return s;
+        }
+
+        // Outside: uniform direction inside the subtended cone.
+        let cos_theta_max = sqrt(1.0 - radius * radius / dist_sq);
+        let cos_theta = 1.0 - u1 * (1.0 - cos_theta_max);
+        let sin_theta = sqrt(max(1.0 - cos_theta * cos_theta, 0.0));
+        let axis = to_center / sqrt(dist_sq);
+        let onb = build_onb(axis);
+        s.direction = onb * vec3<f32>(sin_theta * cos(phi), sin_theta * sin(phi), cos_theta);
+        s.point = p + s.direction;
+        s.pdf = 1.0 / (2.0 * PI * (1.0 - cos_theta_max));
+        s.valid = true;
+        return s;
+    }
+
+    let disc = discs[shape_idx - params.num_spheres];
+    let center = disc.center.xyz;
+    let normal = disc.normal.xyz;
+    let radius = disc.radius;
+    let onb = build_onb(normal);
+    let r = radius * sqrt(u1);
+    let point = center + onb[0] * (r * cos(phi)) + onb[1] * (r * sin(phi));
+
+    let to_light = point - p;
+    let dist_sq = dot(to_light, to_light);
+    if dist_sq == 0.0 {
+        return s;
+    }
+    let direction = to_light / sqrt(dist_sq);
+    let cos_light = abs(dot(direction, normal));
+    if cos_light < 1e-6 {
+        return s;
+    }
+    s.direction = direction;
+    s.point = point;
+    s.pdf = dist_sq / (PI * radius * radius * cos_light);
+    s.valid = true;
+    return s;
+}
+
+// Solid-angle pdf that light_sample from p would produce the unit direction
+// that reaches the light at point.
+fn light_pdf(shape_idx: u32, p: vec3<f32>, point: vec3<f32>, direction: vec3<f32>) -> f32 {
+    if shape_idx < params.num_spheres {
+        let sphere = spheres[shape_idx];
+        let center = sphere.center_radius.xyz;
+        let radius = sphere.center_radius.w;
+        let to_center = center - p;
+        let dist_sq = dot(to_center, to_center);
+        if dist_sq <= radius * radius {
+            return 1.0 / (4.0 * PI);
+        }
+        let cos_theta_max = sqrt(1.0 - radius * radius / dist_sq);
+        return 1.0 / (2.0 * PI * (1.0 - cos_theta_max));
+    }
+
+    let disc = discs[shape_idx - params.num_spheres];
+    let normal = disc.normal.xyz;
+    let radius = disc.radius;
+    let to_point = point - p;
+    let cos_light = abs(dot(direction, normal));
+    if cos_light < 1e-6 {
+        return 0.0;
+    }
+    return dot(to_point, to_point) / (PI * radius * radius * cos_light);
+}
+
+// Direct lighting at a Lambertian vertex from one uniformly chosen light,
+// weighted against BSDF sampling unless full_weight is set.
+fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool) -> vec3<f32> {
+    let light_index = min(u32(random() * f32(params.num_lights)), params.num_lights - 1u);
+    let light_shape = lights[light_index];
+
+    let ls = light_sample(light_shape, hit.p);
+    if !ls.valid {
+        return vec3<f32>(0.0);
+    }
+    let cos_theta = dot(ls.direction, hit.normal);
+    if cos_theta <= 0.0 {
+        return vec3<f32>(0.0);
+    }
+
+    let shadow_ray = Ray(hit.p + hit.normal * 0.001, ls.direction);
+    let shadow_hit = intersect_bvh(shadow_ray);
+    if !shadow_hit.valid || shadow_hit.shape_idx != light_shape {
+        return vec3<f32>(0.0);
+    }
+
+    let emitted = materials[shadow_hit.material_idx].color.xyz;
+    let pdf_light = ls.pdf / f32(params.num_lights);
+    let pdf_bsdf = cos_theta / PI;
+    var weight = 1.0;
+    if !full_weight {
+        weight = power_heuristic(pdf_light, pdf_bsdf);
+    }
+
+    // f * cos / pdf with f = albedo / PI
+    return albedo * emitted * (cos_theta / (PI * pdf_light) * weight);
+}
+
+// ============================================================================
 // Path Tracing
 // ============================================================================
 
@@ -461,6 +618,14 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
     var ray = initial_ray;
     var color = vec3<f32>(0.0);
     var throughput = vec3<f32>(1.0);
+
+    let use_nee = params.num_lights > 0u;
+
+    // How the current ray was generated: camera and specular bounces add any
+    // emission they find at full weight; diffuse bounces carry their pdf so
+    // emission can be weighted against light sampling.
+    var prev_specular = true;
+    var prev_pdf = 0.0;
 
     for (var depth: u32 = 0u; depth < params.max_depth; depth = depth + 1u) {
         let hit = intersect_bvh(ray);
@@ -474,7 +639,13 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
 
         // Add emission from lights
         if material.material_type == MATERIAL_DIFFUSE_LIGHT {
-            color = color + throughput * material.color.xyz;
+            var weight = 1.0;
+            if use_nee && !prev_specular {
+                let direction = normalize(ray.direction);
+                let pdf_light = light_pdf(hit.shape_idx, ray.origin, hit.p, direction) / f32(params.num_lights);
+                weight = power_heuristic(prev_pdf, pdf_light);
+            }
+            color = color + throughput * material.color.xyz * weight;
             break;
         }
 
@@ -482,6 +653,17 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
         let scattered = scatter(ray, hit, material);
         if !scattered.valid {
             break;
+        }
+
+        if use_nee && scattered.diffuse {
+            // At the last allowed interaction there is no BSDF-sampled
+            // continuation to share the light with.
+            let last_vertex = depth + 1u >= params.max_depth;
+            color = color + throughput * sample_direct_light(hit, scattered.attenuation, last_vertex);
+            prev_specular = false;
+            prev_pdf = scattered.pdf;
+        } else {
+            prev_specular = true;
         }
 
         throughput = throughput * scattered.attenuation;

@@ -1,4 +1,5 @@
 use crate::aabb::AABB;
+use crate::light::LightShape;
 use crate::ray::Ray;
 use crate::Material;
 use crate::Vec3;
@@ -12,6 +13,11 @@ pub type Hitable = Box<dyn Intersectable + Send + Sync>;
 pub trait Intersectable: Debug + Send + Sync {
     fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection<'_>>;
     fn bounding_box(&self) -> AABB;
+
+    /// The light geometry of this shape, if it emits light.
+    fn as_light(&self) -> Option<LightShape> {
+        None
+    }
 }
 
 /// Intersection record. When we hit an object, this is where we store that hit.
@@ -23,6 +29,7 @@ pub trait Intersectable: Debug + Send + Sync {
 /// * `u` - Texture coordinates.
 /// * `v` - Texture coordinates.
 /// * `material` - Material of the hit object.
+/// * `shape_id` - Index of the hit shape in its BVH (0 when not from a BVH).
 #[derive(Clone, Debug)]
 pub struct Intersection<'a> {
     pub p: Vec3,
@@ -31,4 +38,5 @@ pub struct Intersection<'a> {
     pub u: f64,
     pub v: f64,
     pub material: &'a Material,
+    pub shape_id: usize,
 }

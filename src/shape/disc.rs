@@ -1,5 +1,6 @@
 use crate::aabb::AABB;
 use crate::intersectable::*;
+use crate::light::LightShape;
 use crate::ray::Ray;
 use crate::Material;
 use crate::Vec3;
@@ -44,10 +45,23 @@ impl Intersectable for Disc {
                     v: 0.5 + d.dot(bitangent) / diameter,
                     normal: self.normal,
                     material: &self.material,
+                    shape_id: 0,
                 })
             } else {
                 None
             }
+        } else {
+            None
+        }
+    }
+
+    fn as_light(&self) -> Option<LightShape> {
+        if matches!(self.material, Material::DiffuseLight(_)) {
+            Some(LightShape::Disc {
+                center: self.center,
+                normal: self.normal,
+                radius: self.radius,
+            })
         } else {
             None
         }

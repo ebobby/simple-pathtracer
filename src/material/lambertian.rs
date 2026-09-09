@@ -16,9 +16,12 @@ impl Scatterable for Lambertian {
     }
 
     fn scatter(&self, _ray: &Ray, intersection: &Intersection) -> Option<Scattered> {
+        let direction = super::random_cosine_direction(intersection.normal);
+        let pdf = direction.dot(intersection.normal).max(0.0) / std::f64::consts::PI;
+
         let scattered = Ray {
             origin: intersection.p,
-            direction: super::random_cosine_direction(intersection.normal),
+            direction,
         };
 
         Some(Scattered {
@@ -26,6 +29,7 @@ impl Scatterable for Lambertian {
             attenuation: self
                 .albedo
                 .value(intersection.u, intersection.v, intersection.p),
+            pdf: Some(pdf),
         })
     }
 }

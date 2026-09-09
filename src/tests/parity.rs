@@ -90,7 +90,7 @@ fn cpu_and_gpu_renders_agree() {
     let gpu_mean = mean(&gpu);
     let relative = (gpu_mean - cpu_mean).abs() / cpu_mean;
     assert!(
-        relative < 0.03,
+        relative < 0.02,
         "mean brightness differs by {:.1}% (cpu {cpu_mean:.4}, gpu {gpu_mean:.4})",
         relative * 100.0
     );
@@ -101,5 +101,5 @@ fn cpu_and_gpu_renders_agree() {
         .map(|(a, b)| (a.r - b.r).abs() + (a.g - b.g).abs() + (a.b - b.b).abs())
         .sum::<f64>()
         / (3.0 * cpu.len() as f64);
-    assert!(mad < 0.05, "mean absolute per-channel difference {mad:.4}");
+    assert!(mad < 0.03, "mean absolute per-channel difference {mad:.4}");
 }

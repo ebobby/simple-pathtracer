@@ -268,7 +268,7 @@ pub struct GPURenderParams {
     pub frame_seed: u32,
     pub num_spheres: u32,
     pub num_discs: u32,
-    pub _pad: u32,
+    pub num_lights: u32,
 }
 
 impl GPURenderParams {
@@ -279,6 +279,7 @@ impl GPURenderParams {
         max_depth: u32,
         num_spheres: u32,
         num_discs: u32,
+        num_lights: u32,
     ) -> Self {
         Self {
             width,
@@ -288,7 +289,7 @@ impl GPURenderParams {
             frame_seed: 0,
             num_spheres,
             num_discs,
-            _pad: 0,
+            num_lights,
         }
     }
 }

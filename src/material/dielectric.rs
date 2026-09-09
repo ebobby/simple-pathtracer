@@ -68,6 +68,7 @@ impl Scatterable for Dielectric {
         Some(Scattered {
             scattered,
             attenuation,
+            pdf: None,
         })
     }
 }

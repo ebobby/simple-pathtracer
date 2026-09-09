@@ -34,6 +34,9 @@ pub enum Material {
 pub struct Scattered {
     pub scattered: Ray,
     pub attenuation: Color,
+    /// Solid-angle pdf of the scattered direction for diffuse materials,
+    /// `None` for specular (delta) materials.
+    pub pdf: Option<f64>,
 }
 
 pub trait Scatterable {
