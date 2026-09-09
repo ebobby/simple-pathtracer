@@ -81,24 +81,22 @@ impl GPUBVHNode {
     }
 }
 
-/// GPU-compatible sphere representation.
-/// Must be 48 bytes to match WGSL array stride (16-byte alignment of vec4).
+/// GPU-compatible sphere representation: centre and radius share one vec4.
+/// 32 bytes, matching the WGSL struct.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct GPUSphere {
-    pub center: GPUVec3,
-    pub radius: f32,
+    pub center_radius: [f32; 4],
     pub material_idx: u32,
-    pub _pad: [u32; 6], // 24 bytes padding to reach 48 bytes total
+    pub _pad: [u32; 3],
 }
 
 impl GPUSphere {
     pub fn new(center: GPUVec3, radius: f32, material_idx: u32) -> Self {
         Self {
-            center,
-            radius,
+            center_radius: [center.x, center.y, center.z, radius],
             material_idx,
-            _pad: [0; 6],
+            _pad: [0; 3],
         }
     }
 }

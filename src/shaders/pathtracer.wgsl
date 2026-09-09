@@ -33,15 +33,11 @@ struct BVHNode {
 }
 
 struct Sphere {
-    center: vec4<f32>,
-    radius: f32,
+    center_radius: vec4<f32>, // xyz = centre, w = radius
     material_idx: u32,
     _pad0: u32,
     _pad1: u32,
     _pad2: u32,
-    _pad3: u32,
-    _pad4: u32,
-    _pad5: u32,
 }
 
 struct Disc {
@@ -204,11 +200,10 @@ fn generate_ray(pixel: vec2<u32>) -> Ray {
 // Intersection Testing
 // ============================================================================
 
-fn intersect_aabb(ray: Ray, aabb_min: vec3<f32>, aabb_max: vec3<f32>, t_max: f32) -> bool {
-    let inv_dir = 1.0 / ray.direction;
-
-    let t0 = (aabb_min - ray.origin) * inv_dir;
-    let t1 = (aabb_max - ray.origin) * inv_dir;
+// Slab test. Returns the (positive) entry distance, or -1.0 on a miss.
+fn intersect_aabb(origin: vec3<f32>, inv_dir: vec3<f32>, aabb_min: vec3<f32>, aabb_max: vec3<f32>, t_max: f32) -> f32 {
+    let t0 = (aabb_min - origin) * inv_dir;
+    let t1 = (aabb_max - origin) * inv_dir;
 
     let tmin = min(t0, t1);
     let tmax = max(t0, t1);
@@ -216,15 +211,15 @@ fn intersect_aabb(ray: Ray, aabb_min: vec3<f32>, aabb_max: vec3<f32>, t_max: f32
     let t_enter = max(max(tmin.x, tmin.y), max(tmin.z, 0.0001));
     let t_exit = min(min(tmax.x, tmax.y), min(tmax.z, t_max));
 
-    return t_enter <= t_exit;
+    return select(-1.0, t_enter, t_enter <= t_exit);
 }
 
 fn intersect_sphere(ray: Ray, sphere: Sphere, t_min: f32, t_max: f32) -> HitRecord {
     var hit: HitRecord;
     hit.valid = false;
 
-    let center = sphere.center.xyz;
-    let radius = sphere.radius;
+    let center = sphere.center_radius.xyz;
+    let radius = sphere.center_radius.w;
 
     // Cancellation-free quadratic (Ray Tracing Gems, ch. 7): the discriminant
     // is computed from the perpendicular distance between the ray and the
@@ -310,12 +305,30 @@ fn intersect_disc(ray: Ray, disc: Disc, t_min: f32, t_max: f32) -> HitRecord {
     return hit;
 }
 
+fn intersect_shape(ray: Ray, shape_idx: u32, t_max: f32) -> HitRecord {
+    if shape_idx < params.num_spheres {
+        return intersect_sphere(ray, spheres[shape_idx], 0.0001, t_max);
+    }
+    var miss: HitRecord;
+    miss.valid = false;
+    let disc_idx = shape_idx - params.num_spheres;
+    if disc_idx < params.num_discs {
+        return intersect_disc(ray, discs[disc_idx], 0.0001, t_max);
+    }
+    return miss;
+}
+
 fn intersect_bvh(ray: Ray) -> HitRecord {
     var closest: HitRecord;
     closest.valid = false;
     closest.t = 1e30;
 
-    // Explicit stack for iterative traversal
+    // Inverse direction computed once per ray for every slab test.
+    let inv_dir = 1.0 / ray.direction;
+
+    // Explicit stack for iterative traversal. Each node's box is tested when
+    // it is popped; testing both children at the parent was measured slower
+    // on the GPU because it doubles node loads.
     var stack: array<u32, 32>;
     var stack_ptr: i32 = 0;
 
@@ -324,42 +337,21 @@ fn intersect_bvh(ray: Ray) -> HitRecord {
 
     while stack_ptr > 0 {
         stack_ptr = stack_ptr - 1;
-        let node_idx = stack[stack_ptr];
-        let node = bvh_nodes[node_idx];
+        let node = bvh_nodes[stack[stack_ptr]];
 
-        if !intersect_aabb(ray, node.aabb_min.xyz, node.aabb_max.xyz, closest.t) {
+        if intersect_aabb(ray.origin, inv_dir, node.aabb_min.xyz, node.aabb_max.xyz, closest.t) < 0.0 {
             continue;
         }
 
         if node.is_leaf == 1u {
-            // Test against the shape at this leaf
-            let shape_idx = node.shape_idx;
-
-            // Check if it's a sphere or disc based on index
-            if shape_idx < params.num_spheres {
-                let hit = intersect_sphere(ray, spheres[shape_idx], 0.0001, closest.t);
-                if hit.valid && hit.t < closest.t {
-                    closest = hit;
-                }
-            } else {
-                let disc_idx = shape_idx - params.num_spheres;
-                if disc_idx < params.num_discs {
-                    let hit = intersect_disc(ray, discs[disc_idx], 0.0001, closest.t);
-                    if hit.valid && hit.t < closest.t {
-                        closest = hit;
-                    }
-                }
+            let hit = intersect_shape(ray, node.shape_idx, closest.t);
+            if hit.valid && hit.t < closest.t {
+                closest = hit;
             }
         } else {
-            // Push children onto stack
-            if node.left_idx != 0xFFFFFFFFu {
-                stack[stack_ptr] = node.left_idx;
-                stack_ptr = stack_ptr + 1;
-            }
-            if node.right_idx != 0xFFFFFFFFu {
-                stack[stack_ptr] = node.right_idx;
-                stack_ptr = stack_ptr + 1;
-            }
+            stack[stack_ptr] = node.left_idx;
+            stack[stack_ptr + 1] = node.right_idx;
+            stack_ptr = stack_ptr + 2;
         }
     }
 
