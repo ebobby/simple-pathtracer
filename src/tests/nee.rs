@@ -127,6 +127,7 @@ fn light_sample_pdf_matches_pdf_evaluation() {
                 normal: Vec3::new(0.2, -1.0, 0.4).normalize(),
                 radius: 1.5,
             },
+            select_pdf: 0.5,
         },
         Light {
             shape_id: 1,
@@ -134,6 +135,7 @@ fn light_sample_pdf_matches_pdf_evaluation() {
                 center: Vec3::new(-2.0, 2.0, 1.0),
                 radius: 0.8,
             },
+            select_pdf: 0.5,
         },
     ];
     let p = Vec3::new(0.3, 0.0, 0.1);
@@ -158,7 +160,43 @@ fn point_inside_sphere_light_samples_full_sphere() {
     let light = Light {
         shape_id: 0,
         shape: LightShape::Sphere { center: Vec3::zero(), radius: 10.0 },
+        select_pdf: 1.0,
     };
     let sample = light.sample(Vec3::new(1.0, 2.0, 3.0), 0.3, 0.6).unwrap();
     assert!((sample.pdf - 1.0 / (4.0 * std::f64::consts::PI)).abs() < 1e-12);
+}
+
+#[test]
+fn lights_are_selected_in_proportion_to_power() {
+    // Two sphere lights of equal size: one emits 9x the radiance of the other.
+    let objects: Vec<Hitable> = vec![
+        Box::new(Sphere {
+            center: Vec3::new(-2.0, 0.0, 0.0),
+            radius: 0.5,
+            material: Material::diffuse_light(Texture::constant_color(Color::new(9.0, 9.0, 9.0))),
+        }),
+        Box::new(Sphere {
+            center: Vec3::new(2.0, 0.0, 0.0),
+            radius: 0.5,
+            material: Material::diffuse_light(Texture::constant_color(Color::new(1.0, 1.0, 1.0))),
+        }),
+    ];
+    let bvh = BVH::from_vec(objects);
+
+    let mut strong = 0;
+    let n = 10_000;
+    for i in 0..n {
+        let (u, _) = Sampler::new(3, i).get_2d(0);
+        let (light, pdf) = bvh.pick_light(u);
+        if light.shape_id == 0 {
+            strong += 1;
+            assert!((pdf - 0.9).abs() < 1e-9, "strong light pdf {pdf}");
+        } else {
+            assert!((pdf - 0.1).abs() < 1e-9, "weak light pdf {pdf}");
+        }
+    }
+    let fraction = strong as f64 / n as f64;
+    assert!((fraction - 0.9).abs() < 0.02, "strong light picked {fraction} of the time");
+
+    assert!((bvh.light_of_shape(1).unwrap().select_pdf - 0.1).abs() < 1e-9);
 }

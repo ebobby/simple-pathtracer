@@ -62,6 +62,42 @@ fn cornell() -> Scene {
     }
 }
 
+/// Dark room with one strong and several weak sphere lights: exercises light
+/// selection.
+fn uneven_lights() -> Scene {
+    let lambert = |c: Color| Material::lambertian(Texture::constant_color(c));
+    let light = |c: Color| Material::diffuse_light(Texture::constant_color(c));
+    let grey = Color::new(0.6, 0.6, 0.6);
+
+    let mut objects: Vec<Hitable> = vec![
+        Box::new(Sphere { center: Vec3::new(0.0, -5000.0, 0.0), radius: 5000.0, material: lambert(grey) }),
+        Box::new(Sphere { center: Vec3::new(0.0, 0.0, -5010.0), radius: 5000.0, material: lambert(grey) }),
+        Box::new(Sphere { center: Vec3::new(0.0, 1.0, -2.0), radius: 1.0, material: lambert(Color::new(0.8, 0.3, 0.3)) }),
+        // Strong light
+        Box::new(Sphere { center: Vec3::new(-3.0, 5.0, 0.0), radius: 0.4, material: light(Color::new(60.0, 55.0, 50.0)) }),
+    ];
+    // Weak decorative lights along the back wall
+    for i in 0..8 {
+        let x = -7.0 + 2.0 * i as f64;
+        objects.push(Box::new(Sphere {
+            center: Vec3::new(x, 0.3, -8.0),
+            radius: 0.15,
+            material: light(Color::new(1.5, 0.4 + 0.15 * i as f64, 0.3)),
+        }));
+    }
+
+    Scene {
+        camera: Camera::new(
+            Vec3::new(0.0, 3.0, 10.0),
+            Vec3::new(0.0, 1.0, -2.0),
+            45.0,
+            f64::from(WIDTH) / f64::from(HEIGHT),
+            0.0,
+        ),
+        world: BVH::from_vec(objects),
+    }
+}
+
 fn rmse(image: &[Color], reference: &[Color]) -> f64 {
     let sum: f64 = image
         .iter()
@@ -71,40 +107,38 @@ fn rmse(image: &[Color], reference: &[Color]) -> f64 {
     (sum / (3.0 * image.len() as f64)).sqrt()
 }
 
-fn main() {
-    let scene = cornell();
-    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
-
-    println!("Rendering reference ({REFERENCE_SAMPLES} spp x4)...");
+fn measure(name: &str, scene: &Scene, workers: usize) {
+    println!("[{name}] rendering reference ({REFERENCE_SAMPLES} spp x4)...");
     let reference = pathtracer::render_linear_with(
-        &scene, WIDTH, HEIGHT, REFERENCE_SAMPLES, MAX_DEPTH, workers, Integrator::NextEventEstimation,
+        scene, WIDTH, HEIGHT, REFERENCE_SAMPLES, MAX_DEPTH, workers, Integrator::NextEventEstimation,
     );
 
     let mut results = Vec::new();
-    for (name, integrator) in [
+    for (label, integrator) in [
         ("BSDF only", Integrator::BsdfOnly),
         ("NEE + MIS", Integrator::NextEventEstimation),
     ] {
         let start = Instant::now();
         let image = pathtracer::render_linear_with(
-            &scene, WIDTH, HEIGHT, SAMPLES, MAX_DEPTH, workers, integrator,
+            scene, WIDTH, HEIGHT, SAMPLES, MAX_DEPTH, workers, integrator,
         );
         let seconds = start.elapsed().as_secs_f64();
-        results.push((name, rmse(&image, &reference), seconds));
+        results.push((label, rmse(&image, &reference), seconds));
     }
 
-    println!();
-    println!("=== Noise benchmark (Cornell box, {WIDTH}x{HEIGHT}, {SAMPLES} spp x4, depth {MAX_DEPTH}) ===");
-    for (name, error, seconds) in &results {
-        println!("{name:<10} RMSE {error:.4}  ({seconds:.2} s)");
+    println!("=== Noise: {name} ({WIDTH}x{HEIGHT}, {SAMPLES} spp x4, depth {MAX_DEPTH}) ===");
+    for (label, error, seconds) in &results {
+        println!("{label:<10} RMSE {error:.4}  ({seconds:.2} s)");
     }
-    let (_, bsdf_err, bsdf_s) = results[0];
-    let (_, nee_err, nee_s) = results[1];
+    let (_, bsdf_err, _) = results[0];
+    let (_, nee_err, _) = results[1];
     // Variance falls as 1/N, so the equal-quality sample ratio is (RMSE ratio)².
-    let ratio = (bsdf_err / nee_err).powi(2);
-    println!(
-        "NEE needs {:.1}x fewer samples for equal noise; {:.1}x less time per sample-equivalent.",
-        ratio,
-        ratio * bsdf_s / nee_s
-    );
+    println!("NEE needs {:.1}x fewer samples than BSDF-only for equal noise.", (bsdf_err / nee_err).powi(2));
+    println!();
+}
+
+fn main() {
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    measure("Cornell box", &cornell(), workers);
+    measure("Uneven lights", &uneven_lights(), workers);
 }

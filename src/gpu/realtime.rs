@@ -564,7 +564,7 @@ impl RealtimeApp {
         });
 
         let lights_data = if scene.lights.is_empty() {
-            vec![0u32]
+            vec![crate::gpu_types::GPULight::new(0, 1.0, 1.0)]
         } else {
             scene.lights.clone()
         };

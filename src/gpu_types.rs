@@ -229,6 +229,28 @@ impl From<&Material> for GPUMaterial {
     }
 }
 
+/// GPU-compatible light entry: which shape emits, how likely selection picks
+/// it, and the running total of those probabilities for CDF search.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+pub struct GPULight {
+    pub shape_idx: u32,
+    pub select_pdf: f32,
+    pub cdf: f32,
+    pub _pad: u32,
+}
+
+impl GPULight {
+    pub fn new(shape_idx: u32, select_pdf: f32, cdf: f32) -> Self {
+        Self {
+            shape_idx,
+            select_pdf,
+            cdf,
+            _pad: 0,
+        }
+    }
+}
+
 /// GPU-compatible camera representation.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]

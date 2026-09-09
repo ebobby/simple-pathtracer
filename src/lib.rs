@@ -305,7 +305,7 @@ fn radiance_with(
                     Some(light) => {
                         let direction = ray.direction.normalize();
                         let pdf_light =
-                            light.pdf(ray.origin, intersection.p, direction) / lights.len() as f64;
+                            light.pdf(ray.origin, intersection.p, direction) * light.select_pdf;
                         light::power_heuristic(prev_pdf, pdf_light)
                     }
                     None => 1.0,
@@ -388,8 +388,9 @@ fn radiance_with(
 }
 
 /// Direct lighting at a Lambertian vertex with `albedo`, from one light
-/// chosen uniformly, weighted against BSDF sampling with the power heuristic
-/// unless `full_weight` says no BSDF continuation will follow.
+/// chosen in proportion to its power, weighted against BSDF sampling with
+/// the power heuristic unless `full_weight` says no BSDF continuation will
+/// follow.
 fn sample_direct_light(
     scene: &Scene,
     intersection: &Intersection,
@@ -398,9 +399,7 @@ fn sample_direct_light(
     u_light: (f64, f64),
     u_select: f64,
 ) -> Color {
-    let lights = scene.world.lights();
-    let light_index = ((u_select * lights.len() as f64) as usize).min(lights.len() - 1);
-    let light = &lights[light_index];
+    let (light, select_pdf) = scene.world.pick_light(u_select);
 
     let Some(sample) = light.sample(intersection.p, u_light.0, u_light.1) else {
         return Color::new(0.0, 0.0, 0.0);
@@ -422,7 +421,7 @@ fn sample_direct_light(
     }
 
     let emitted = hit.material.emit(hit.u, hit.v, hit.p);
-    let pdf_light = sample.pdf / lights.len() as f64;
+    let pdf_light = sample.pdf * select_pdf;
     let pdf_bsdf = cos_theta / std::f64::consts::PI;
     let weight = if full_weight {
         1.0

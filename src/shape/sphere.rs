@@ -59,12 +59,13 @@ impl Intersectable for Sphere {
         })
     }
 
-    fn as_light(&self) -> Option<LightShape> {
+    fn as_light(&self) -> Option<(LightShape, crate::Color)> {
         if matches!(self.material, Material::DiffuseLight(_)) {
-            Some(LightShape::Sphere {
+            let emission = self.material.emit(0.5, 0.5, self.center);
+            Some((LightShape::Sphere {
                 center: self.center,
                 radius: self.radius,
-            })
+            }, emission))
         } else {
             None
         }

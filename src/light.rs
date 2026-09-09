@@ -11,11 +11,22 @@ pub enum LightShape {
     Disc { center: Vec3, normal: Vec3, radius: f64 },
 }
 
-/// A light: which shape in the scene it is, and its geometry.
+/// A light: which shape in the scene it is, its geometry, and how likely
+/// light selection is to pick it (proportional to emitted power).
 #[derive(Clone, Copy, Debug)]
 pub struct Light {
     pub shape_id: usize,
     pub shape: LightShape,
+    pub select_pdf: f64,
+}
+
+impl LightShape {
+    pub fn area(&self) -> f64 {
+        match *self {
+            LightShape::Sphere { radius, .. } => 4.0 * PI * radius * radius,
+            LightShape::Disc { radius, .. } => PI * radius * radius,
+        }
+    }
 }
 
 /// A sampled direction towards a light from a shading point.

@@ -91,6 +91,13 @@ struct ScatterResult {
     valid: bool,
 }
 
+struct Light {
+    shape_idx: u32,
+    select_pdf: f32,
+    cdf: f32,
+    _pad: u32,
+}
+
 struct LightSample {
     direction: vec3<f32>, // unit direction from the shading point
     point: vec3<f32>,     // a point on the light along direction
@@ -111,7 +118,7 @@ const PI: f32 = 3.14159265359;
 @group(0) @binding(4) var<storage, read> discs: array<Disc>;
 @group(0) @binding(5) var<storage, read> materials: array<Material>;
 @group(0) @binding(6) var<storage, read_write> output: array<vec4<f32>>;
-@group(0) @binding(7) var<storage, read> lights: array<u32>; // shape indices
+@group(0) @binding(7) var<storage, read> lights: array<Light>;
 
 // ============================================================================
 // Sampling: padded 2D Sobol with hash-based Owen scrambling
@@ -598,11 +605,28 @@ fn light_pdf(shape_idx: u32, p: vec3<f32>, point: vec3<f32>, direction: vec3<f32
     return dot(to_point, to_point) / (PI * radius * radius * cos_light);
 }
 
-// Direct lighting at a Lambertian vertex from one uniformly chosen light,
-// weighted against BSDF sampling unless full_weight is set.
+// Selection probability of the light that is shape shape_idx (0 if none).
+fn light_select_pdf(shape_idx: u32) -> f32 {
+    for (var i = 0u; i < params.num_lights; i = i + 1u) {
+        if lights[i].shape_idx == shape_idx {
+            return lights[i].select_pdf;
+        }
+    }
+    return 0.0;
+}
+
+// Direct lighting at a Lambertian vertex from one light chosen in proportion
+// to its power, weighted against BSDF sampling unless full_weight is set.
 fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_light: vec2<f32>, u_select: f32) -> vec3<f32> {
-    let light_index = min(u32(u_select * f32(params.num_lights)), params.num_lights - 1u);
-    let light_shape = lights[light_index];
+    var light_index = params.num_lights - 1u;
+    for (var i = 0u; i < params.num_lights; i = i + 1u) {
+        if u_select < lights[i].cdf {
+            light_index = i;
+            break;
+        }
+    }
+    let light = lights[light_index];
+    let light_shape = light.shape_idx;
 
     let ls = light_sample(light_shape, hit.p, u_light.x, u_light.y);
     if !ls.valid {
@@ -620,7 +644,7 @@ fn sample_direct_light(hit: HitRecord, albedo: vec3<f32>, full_weight: bool, u_l
     }
 
     let emitted = materials[shadow_hit.material_idx].color.xyz;
-    let pdf_light = ls.pdf / f32(params.num_lights);
+    let pdf_light = ls.pdf * light.select_pdf;
     let pdf_bsdf = cos_theta / PI;
     var weight = 1.0;
     if !full_weight {
@@ -663,7 +687,7 @@ fn trace_path(initial_ray: Ray) -> vec3<f32> {
             var weight = 1.0;
             if use_nee && !prev_specular {
                 let direction = normalize(ray.direction);
-                let pdf_light = light_pdf(hit.shape_idx, ray.origin, hit.p, direction) / f32(params.num_lights);
+                let pdf_light = light_pdf(hit.shape_idx, ray.origin, hit.p, direction) * light_select_pdf(hit.shape_idx);
                 weight = power_heuristic(prev_pdf, pdf_light);
             }
             color = color + throughput * material.color.xyz * weight;

@@ -58,8 +58,8 @@ pub struct GPUScene {
     pub spheres: Vec<GPUSphere>,
     pub discs: Vec<GPUDisc>,
     pub materials: Vec<GPUMaterial>,
-    /// Shape indices (spheres first, then discs) of emissive shapes.
-    pub lights: Vec<u32>,
+    /// Emissive shapes with power-proportional selection probabilities.
+    pub lights: Vec<GPULight>,
     pub num_spheres: u32,
     pub num_discs: u32,
 }
@@ -118,11 +118,31 @@ impl GPUScene {
         let num_spheres = spheres.len() as u32;
         let num_discs = discs.len() as u32;
 
-        let lights: Vec<u32> = shapes
+        // Lights, weighted by emitted power (luminance x area)
+        let mut light_shapes = Vec::new();
+        let mut powers = Vec::new();
+        for (i, shape) in shapes.iter().enumerate() {
+            if let Material::DiffuseLight(_) = shape.material() {
+                let (center, area) = match shape {
+                    GPUShape::Sphere(s) => (s.center, 4.0 * std::f64::consts::PI * s.radius * s.radius),
+                    GPUShape::Disc(d) => (d.center, std::f64::consts::PI * d.radius * d.radius),
+                };
+                let emission = shape.material().emit(0.5, 0.5, center);
+                let luminance = 0.2126 * emission.r + 0.7152 * emission.g + 0.0722 * emission.b;
+                light_shapes.push(i as u32);
+                powers.push((luminance * area).max(0.0));
+            }
+        }
+        let total: f64 = powers.iter().sum();
+        let mut cumulative = 0.0;
+        let lights: Vec<GPULight> = light_shapes
             .iter()
-            .enumerate()
-            .filter(|(_, shape)| matches!(shape.material(), Material::DiffuseLight(_)))
-            .map(|(i, _)| i as u32)
+            .zip(&powers)
+            .map(|(&shape_idx, &power)| {
+                let pdf = if total > 0.0 { power / total } else { 1.0 / powers.len() as f64 };
+                cumulative += pdf;
+                GPULight::new(shape_idx, pdf as f32, cumulative as f32)
+            })
             .collect();
 
         // Build BVH

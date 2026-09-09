@@ -1,8 +1,7 @@
 use crate::aabb::AABB;
 use crate::light::LightShape;
 use crate::ray::Ray;
-use crate::Material;
-use crate::Vec3;
+use crate::{Color, Material, Vec3};
 
 use std::fmt::Debug;
 use std::marker::{Send, Sync};
@@ -14,8 +13,9 @@ pub trait Intersectable: Debug + Send + Sync {
     fn intersect(&self, ray: &Ray, min: f64, max: f64) -> Option<Intersection<'_>>;
     fn bounding_box(&self) -> AABB;
 
-    /// The light geometry of this shape, if it emits light.
-    fn as_light(&self) -> Option<LightShape> {
+    /// The light geometry and a representative emitted radiance of this
+    /// shape, if it emits light.
+    fn as_light(&self) -> Option<(LightShape, Color)> {
         None
     }
 }

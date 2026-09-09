@@ -55,13 +55,14 @@ impl Intersectable for Disc {
         }
     }
 
-    fn as_light(&self) -> Option<LightShape> {
+    fn as_light(&self) -> Option<(LightShape, crate::Color)> {
         if matches!(self.material, Material::DiffuseLight(_)) {
-            Some(LightShape::Disc {
+            let emission = self.material.emit(0.5, 0.5, self.center);
+            Some((LightShape::Disc {
                 center: self.center,
                 normal: self.normal,
                 radius: self.radius,
-            })
+            }, emission))
         } else {
             None
         }
