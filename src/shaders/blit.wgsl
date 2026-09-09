@@ -4,8 +4,8 @@
 struct BlitParams {
     sample_count: u32,
     gamma: f32,
-    _pad0: u32,
-    _pad1: u32,
+    render_width: u32,  // size of the traced grid, upscaled to the window
+    render_height: u32,
 }
 
 @group(0) @binding(0) var<uniform> params: BlitParams;
@@ -19,7 +19,10 @@ fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         return;
     }
 
-    let idx = global_id.y * dims.x + global_id.x;
+    // Nearest-neighbour upscale when the tracer ran at reduced resolution
+    let sx = global_id.x * params.render_width / dims.x;
+    let sy = global_id.y * params.render_height / dims.y;
+    let idx = sy * params.render_width + sx;
     let accumulated = accumulation[idx];
 
     // Normalize by sample count

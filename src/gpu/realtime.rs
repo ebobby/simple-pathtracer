@@ -22,6 +22,9 @@ const TARGET_FRAME_MS: f64 = 14.0;
 const MIN_SAMPLES_PER_FRAME: u32 = 1;
 const MAX_SAMPLES_PER_FRAME: u32 = 64;
 
+/// Resolution divisor used while the camera is moving.
+const MOVING_RESOLUTION_SCALE: u32 = 2;
+
 /// Camera movement speed (units per second)
 const MOVE_SPEED: f64 = 5.0;
 
@@ -38,8 +41,9 @@ const BLIT_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Floa
 struct BlitParams {
     sample_count: u32,
     gamma: f32,
-    _pad0: u32,
-    _pad1: u32,
+    /// Size of the grid the tracer rendered (may be smaller than the window).
+    render_width: u32,
+    render_height: u32,
 }
 
 /// Camera controller state
@@ -224,7 +228,11 @@ struct RealtimeApp {
     // Render state
     camera_controller: Option<CameraController>,
     sample_count: u32,
-    samples_per_frame: u32,
+    /// Adaptive samples per frame, kept separately for the still and moving
+    /// states because the moving state renders a quarter of the pixels.
+    samples_per_frame_still: u32,
+    samples_per_frame_moving: u32,
+    moving: bool,
     reset_accumulation: bool,
     gamma: f64,
     last_frame: Instant,
@@ -266,7 +274,9 @@ impl RealtimeApp {
             scene: None,
             camera_controller: Some(CameraController::new(&camera)),
             sample_count: 0,
-            samples_per_frame: MIN_SAMPLES_PER_FRAME,
+            samples_per_frame_still: MIN_SAMPLES_PER_FRAME,
+            samples_per_frame_moving: MIN_SAMPLES_PER_FRAME,
+            moving: false,
             reset_accumulation: true,
             gamma,
             last_frame: Instant::now(),
@@ -720,7 +730,14 @@ impl RealtimeApp {
         let camera_controller = self.camera_controller.as_mut().unwrap();
         camera_controller.update(dt);
 
-        if camera_controller.take_changed() {
+        let camera_changed = camera_controller.take_changed();
+        if camera_changed != self.moving {
+            // Entering or leaving the moving state changes the render
+            // resolution, so accumulation restarts either way.
+            self.reset_accumulation = true;
+            self.moving = camera_changed;
+        }
+        if camera_changed {
             self.reset_accumulation = true;
 
             // Update camera buffer
@@ -749,10 +766,17 @@ impl RealtimeApp {
         let scene = self.scene.as_ref().unwrap();
 
         // Update render params
-        let samples_this_frame = self.samples_per_frame;
+        let scale = if self.moving { MOVING_RESOLUTION_SCALE } else { 1 };
+        let render_width = (config.width + scale - 1) / scale;
+        let render_height = (config.height + scale - 1) / scale;
+        let samples_this_frame = if self.moving {
+            self.samples_per_frame_moving
+        } else {
+            self.samples_per_frame_still
+        };
         let params = GPURenderParams {
-            width: config.width,
-            height: config.height,
+            width: render_width,
+            height: render_height,
             samples: samples_this_frame,
             max_depth: 50,
             frame_seed: self.frame_count as u32,
@@ -774,8 +798,8 @@ impl RealtimeApp {
         let blit_params = BlitParams {
             sample_count: self.sample_count,
             gamma: self.gamma as f32,
-            _pad0: 0,
-            _pad1: 0,
+            render_width,
+            render_height,
         };
         queue.write_buffer(
             self.blit_params_buffer.as_ref().unwrap(),
@@ -801,8 +825,8 @@ impl RealtimeApp {
             });
             compute_pass.set_pipeline(self.pathtracer_pipeline.as_ref().unwrap().pipeline());
             compute_pass.set_bind_group(0, self.pathtracer_bind_group.as_ref().unwrap(), &[]);
-            let workgroups_x = (config.width + 7) / 8;
-            let workgroups_y = (config.height + 7) / 8;
+            let workgroups_x = (render_width + 7) / 8;
+            let workgroups_y = (render_height + 7) / 8;
             compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
@@ -826,10 +850,15 @@ impl RealtimeApp {
         queue.submit(Some(encoder.finish()));
         device.poll(wgpu::Maintain::Wait);
         let gpu_ms = gpu_start.elapsed().as_secs_f64() * 1000.0;
+        let samples_per_frame = if self.moving {
+            &mut self.samples_per_frame_moving
+        } else {
+            &mut self.samples_per_frame_still
+        };
         if gpu_ms < TARGET_FRAME_MS * 0.7 {
-            self.samples_per_frame = (self.samples_per_frame + 1).min(MAX_SAMPLES_PER_FRAME);
+            *samples_per_frame = (*samples_per_frame + 1).min(MAX_SAMPLES_PER_FRAME);
         } else if gpu_ms > TARGET_FRAME_MS * 1.3 {
-            self.samples_per_frame = (self.samples_per_frame / 2).max(MIN_SAMPLES_PER_FRAME);
+            *samples_per_frame = (*samples_per_frame / 2).max(MIN_SAMPLES_PER_FRAME);
         }
 
         // Fullscreen render pass (texture -> surface)
@@ -866,10 +895,12 @@ impl RealtimeApp {
         // Print status periodically
         if self.frame_count % 60 == 0 {
             println!(
-                "Frame {}: {} samples ({} per frame, {:.1} ms GPU), {:.1} FPS",
+                "Frame {}: {} samples ({} per frame at {}x{}, {:.1} ms GPU), {:.1} FPS",
                 self.frame_count,
                 self.sample_count,
                 samples_this_frame,
+                render_width,
+                render_height,
                 gpu_ms,
                 1.0 / dt
             );
