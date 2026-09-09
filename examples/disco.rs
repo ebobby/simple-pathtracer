@@ -191,7 +191,7 @@ fn main() {
 
     let width = 800;
     let height = 600;
-    let samples = 4000;
+    let samples = 800;
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 50;

@@ -136,9 +136,9 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let use_gpu = args.iter().any(|arg| arg == "--gpu");
 
-    let width = 800;
-    let height = 600;
-    let samples = 5000; // Higher samples needed for many bounces
+    let width = 1280;
+    let height = 720;
+    let samples = 6000; // Higher samples needed for many bounces
     let aspect_ratio = f64::from(width) / f64::from(height);
     let gamma = 2.2f64;
     let max_depth = 100; // High depth for infinite reflections
