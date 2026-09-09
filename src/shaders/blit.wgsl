@@ -10,7 +10,7 @@ struct BlitParams {
 
 @group(0) @binding(0) var<uniform> params: BlitParams;
 @group(0) @binding(1) var<storage, read> accumulation: array<vec4<f32>>;
-@group(0) @binding(2) var output_texture: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(2) var output_texture: texture_storage_2d<rgba16float, write>;
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {

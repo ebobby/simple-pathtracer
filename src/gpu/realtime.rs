@@ -15,14 +15,22 @@ use super::scene::{GPUScene, GPUShape};
 use crate::gpu_types::{GPUCamera, GPURenderParams, GPUVec3};
 use crate::Camera;
 
-/// Samples per frame for real-time rendering
-const SAMPLES_PER_FRAME: u32 = 4;
+/// Target GPU time per frame; samples per frame adapt to stay near it.
+const TARGET_FRAME_MS: f64 = 14.0;
+
+/// Bounds for the adaptive samples-per-frame count.
+const MIN_SAMPLES_PER_FRAME: u32 = 1;
+const MAX_SAMPLES_PER_FRAME: u32 = 64;
 
 /// Camera movement speed (units per second)
 const MOVE_SPEED: f64 = 5.0;
 
 /// Mouse sensitivity (radians per pixel)
 const MOUSE_SENSITIVITY: f64 = 0.003;
+
+/// Linear-light intermediate texture between the accumulation buffer and the
+/// sRGB surface. 16-bit float avoids quantising dark values to 8 bits.
+const BLIT_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// Blit shader parameters
 #[repr(C)]
@@ -204,8 +212,10 @@ struct RealtimeApp {
     output_buffer: Option<wgpu::Buffer>,
     pathtracer_bind_group: Option<wgpu::BindGroup>,
 
-    // Blit state
+    // Blit state (recreated on resize, reused across frames)
     blit_params_buffer: Option<wgpu::Buffer>,
+    blit_bind_group: Option<wgpu::BindGroup>,
+    fullscreen_bind_group: Option<wgpu::BindGroup>,
 
     // Scene data
     scene: Option<GPUScene>,
@@ -213,6 +223,8 @@ struct RealtimeApp {
     // Render state
     camera_controller: Option<CameraController>,
     sample_count: u32,
+    samples_per_frame: u32,
+    reset_accumulation: bool,
     gamma: f64,
     last_frame: Instant,
     frame_count: u64,
@@ -247,9 +259,13 @@ impl RealtimeApp {
             output_buffer: None,
             pathtracer_bind_group: None,
             blit_params_buffer: None,
+            blit_bind_group: None,
+            fullscreen_bind_group: None,
             scene: None,
             camera_controller: Some(CameraController::new(&camera)),
             sample_count: 0,
+            samples_per_frame: MIN_SAMPLES_PER_FRAME,
+            reset_accumulation: true,
             gamma,
             last_frame: Instant::now(),
             frame_count: 0,
@@ -310,6 +326,7 @@ impl RealtimeApp {
             desired_maximum_frame_latency: 2,
         };
         surface.configure(&device, &config);
+        println!("Surface: {}x{} physical pixels", config.width, config.height);
 
         // Build scene
         let shapes = self.shapes.take().unwrap();
@@ -362,7 +379,7 @@ impl RealtimeApp {
                         visibility: wgpu::ShaderStages::COMPUTE,
                         ty: wgpu::BindingType::StorageTexture {
                             access: wgpu::StorageTextureAccess::WriteOnly,
-                            format: wgpu::TextureFormat::Rgba8Unorm,
+                            format: BLIT_TEXTURE_FORMAT,
                             view_dimension: wgpu::TextureViewDimension::D2,
                         },
                         count: None,
@@ -605,6 +622,68 @@ impl RealtimeApp {
         self.pathtracer_bind_group = Some(pathtracer_bind_group);
         self.blit_params_buffer = Some(blit_params_buffer);
         self.scene = Some(scene);
+
+        self.create_blit_resources();
+    }
+
+    /// (Re)create the intermediate texture and the bind groups that read and
+    /// write it, sized to the current surface.
+    fn create_blit_resources(&mut self) {
+        let device = self.device.as_ref().unwrap();
+        let config = self.surface_config.as_ref().unwrap();
+
+        let blit_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Blit Texture"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: BLIT_TEXTURE_FORMAT,
+            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let blit_texture_view = blit_texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Blit Bind Group"),
+            layout: self.blit_bind_group_layout.as_ref().unwrap(),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: self.blit_params_buffer.as_ref().unwrap().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: self.output_buffer.as_ref().unwrap().as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: wgpu::BindingResource::TextureView(&blit_texture_view),
+                },
+            ],
+        });
+
+        let fullscreen_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Fullscreen Bind Group"),
+            layout: self.fullscreen_bind_group_layout.as_ref().unwrap(),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&blit_texture_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(self.sampler.as_ref().unwrap()),
+                },
+            ],
+        });
+
+        self.blit_bind_group = Some(blit_bind_group);
+        self.fullscreen_bind_group = Some(fullscreen_bind_group);
     }
 
     fn render(&mut self) {
@@ -623,13 +702,7 @@ impl RealtimeApp {
         camera_controller.update(dt);
 
         if camera_controller.take_changed() {
-            // Reset accumulation
-            self.sample_count = 0;
-
-            // Clear output buffer
-            let output_size = (config.width * config.height * 16) as u64;
-            let zeros = vec![0u8; output_size as usize];
-            queue.write_buffer(self.output_buffer.as_ref().unwrap(), 0, &zeros);
+            self.reset_accumulation = true;
 
             // Update camera buffer
             let aspect_ratio = config.width as f64 / config.height as f64;
@@ -657,10 +730,11 @@ impl RealtimeApp {
         let scene = self.scene.as_ref().unwrap();
 
         // Update render params
+        let samples_this_frame = self.samples_per_frame;
         let params = GPURenderParams {
             width: config.width,
             height: config.height,
-            samples: SAMPLES_PER_FRAME,
+            samples: samples_this_frame,
             max_depth: 50,
             frame_seed: self.frame_count as u32,
             num_spheres: scene.num_spheres,
@@ -674,7 +748,10 @@ impl RealtimeApp {
         );
 
         // Update blit params
-        self.sample_count += SAMPLES_PER_FRAME;
+        if self.reset_accumulation {
+            self.sample_count = 0;
+        }
+        self.sample_count += samples_this_frame;
         let blit_params = BlitParams {
             sample_count: self.sample_count,
             gamma: self.gamma as f32,
@@ -687,62 +764,15 @@ impl RealtimeApp {
             bytemuck::cast_slice(&[blit_params]),
         );
 
-        // Create intermediate texture for blit output
-        let blit_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Blit Texture"),
-            size: wgpu::Extent3d {
-                width: config.width,
-                height: config.height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::Rgba8Unorm,
-            usage: wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let blit_texture_view = blit_texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-        // Create blit bind group
-        let blit_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Blit Bind Group"),
-            layout: self.blit_bind_group_layout.as_ref().unwrap(),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: self.blit_params_buffer.as_ref().unwrap().as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: self.output_buffer.as_ref().unwrap().as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&blit_texture_view),
-                },
-            ],
-        });
-
-        // Create fullscreen bind group
-        let fullscreen_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Fullscreen Bind Group"),
-            layout: self.fullscreen_bind_group_layout.as_ref().unwrap(),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&blit_texture_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(self.sampler.as_ref().unwrap()),
-                },
-            ],
-        });
-
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Render Encoder"),
         });
+
+        // Start accumulating from zero after a camera move or resize
+        if self.reset_accumulation {
+            encoder.clear_buffer(self.output_buffer.as_ref().unwrap(), 0, None);
+            self.reset_accumulation = false;
+        }
 
         // Pathtracer compute pass
         {
@@ -764,13 +794,29 @@ impl RealtimeApp {
                 timestamp_writes: None,
             });
             compute_pass.set_pipeline(self.blit_pipeline.as_ref().unwrap());
-            compute_pass.set_bind_group(0, &blit_bind_group, &[]);
+            compute_pass.set_bind_group(0, self.blit_bind_group.as_ref().unwrap(), &[]);
             let workgroups_x = (config.width + 7) / 8;
             let workgroups_y = (config.height + 7) / 8;
             compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
         }
 
+        // Submit the tracing work on its own and wait for it, so the measured
+        // time reflects the tracing and not the swapchain, then adapt the
+        // sample count towards the target frame time.
+        let gpu_start = Instant::now();
+        queue.submit(Some(encoder.finish()));
+        device.poll(wgpu::Maintain::Wait);
+        let gpu_ms = gpu_start.elapsed().as_secs_f64() * 1000.0;
+        if gpu_ms < TARGET_FRAME_MS * 0.7 {
+            self.samples_per_frame = (self.samples_per_frame + 1).min(MAX_SAMPLES_PER_FRAME);
+        } else if gpu_ms > TARGET_FRAME_MS * 1.3 {
+            self.samples_per_frame = (self.samples_per_frame / 2).max(MIN_SAMPLES_PER_FRAME);
+        }
+
         // Fullscreen render pass (texture -> surface)
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Present Encoder"),
+        });
         let output_view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -790,10 +836,9 @@ impl RealtimeApp {
                 occlusion_query_set: None,
             });
             render_pass.set_pipeline(self.fullscreen_pipeline.as_ref().unwrap());
-            render_pass.set_bind_group(0, &fullscreen_bind_group, &[]);
+            render_pass.set_bind_group(0, self.fullscreen_bind_group.as_ref().unwrap(), &[]);
             render_pass.draw(0..3, 0..1);
         }
-
         queue.submit(Some(encoder.finish()));
         output.present();
 
@@ -802,9 +847,11 @@ impl RealtimeApp {
         // Print status periodically
         if self.frame_count % 60 == 0 {
             println!(
-                "Frame {}: {} samples, {:.1} FPS",
+                "Frame {}: {} samples ({} per frame, {:.1} ms GPU), {:.1} FPS",
                 self.frame_count,
                 self.sample_count,
+                samples_this_frame,
+                gpu_ms,
                 1.0 / dt
             );
         }
@@ -868,8 +915,10 @@ impl RealtimeApp {
             self.output_buffer = Some(output_buffer);
             self.pathtracer_bind_group = Some(pathtracer_bind_group);
 
-            // Reset accumulation
-            self.sample_count = 0;
+            self.create_blit_resources();
+
+            // Reset accumulation and re-upload the camera for the new aspect ratio
+            self.reset_accumulation = true;
             if let Some(controller) = self.camera_controller.as_mut() {
                 controller.changed = true;
             }
